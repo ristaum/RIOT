@@ -39,6 +39,17 @@ extern "C" //{
 #define MLX90393_REG_REF_TEMP       0x24
 
 /**
+ * @brief configuration bit masks
+ * 
+ */
+#define MLX90393_MASK_BDR           0x003F
+#define MLX90393_MASK_WOC_DIFF      0x1000
+#define MLX90393_MASK_TCMP_EN       0x0400
+#define MLX90393_MASK_GAIN_SEL      0x0070
+#define MLX90393_MASK_RES_XYZ       0x07E0
+#define MLX90393_MASK_COMM_MODE     0x6000
+
+/**
  * Command Set
  */
 #define MLX90393_COMMAND_SB         0x1F
@@ -65,16 +76,6 @@ extern "C" //{
  */
 #define MLX90393_COMMAND_EX_TIMEOUT     1000
 #define MLX90393_COMMAND_RT_TIMEOUT     1500
-
-/**
- * @brief configuration bit masks
- * 
- */
-#define MLX90393_MASK_BDR           0x3F
-#define MLX90393_MASK_WOC_DIFF      0x1000
-#define MLX90393_MASK_TCMP_EN       0x400
-#define MLX90393_MASK_GAIN_SEL      0x70
-#define MLX90393_MASK_RES_XYZ       0x7E0
 
 /**
  * @brief 

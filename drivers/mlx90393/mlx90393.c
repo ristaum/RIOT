@@ -23,10 +23,15 @@
 #include "mlx90393_params.h"
 #include "ztimer.h"
 
+#if MODULE_MLX90393_SPI
+#define DEV_SPI             (dev->params.spi)
+#define DEV_CS_PIN          (dev->params.cs_pin)
+#elif MODULE_MLX90393_I2C
 #define DEV_I2C             (dev->params.i2c)
 #define DEV_ADDR            (dev->params.addr)
+#endif
 #define DEV_MODE            (dev->params.mode)
-#define DEV_PIN             (dev->params.int_pin)
+#define DEV_INT_PIN         (dev->params.int_pin)
 #define DEV_ODR             (dev->params.odr)
 #define DEV_GAIN            (dev->params.gain)
 #define DEV_RESOLUTION      (dev->params.resolution)
@@ -35,48 +40,129 @@
 #define DEV_Y_OFFSET        (dev->params.offset.y)
 #define DEV_Z_OFFSET        (dev->params.offset.z)
 
-int _check_status_byte(mlx90393_t *dev) 
+#if MODULE_MLX90393_SPI
+
+static int _init_bus(const mlx90393_t *dev)
 {
-    uint8_t status;
-    if (i2c_read_byte(DEV_I2C, DEV_ADDR, &status, 0) != 0) {
-        return MLX90393_ERROR_I2C;
-    }
-    if (status & MLX90393_STATUS_ERROR) {
-        return MLX90393_ERROR;
+    if (spi_init_cs(DEV_SPI, DEV_CS_PIN) != SPI_OK) {
+        return MLX90393_ERROR_SPI;
     }
     return MLX90393_SUCCESS;
 }
 
-int _write_register(mlx90393_t *dev, uint8_t addr, uint16_t value) 
+static void _acquire(mlx90393_t *dev)
+{
+    spi_acquire(DEV_SPI, DEV_CS_PIN, SPI_MODE_3, SPI_CLK_10MHZ);
+}
+
+static void _release(mlx90393_t *dev)
+{
+    spi_release(DEV_SPI);
+}
+
+static int _write_byte(mlx90393_t *dev, uint8_t data)
+{
+    spi_transfer_byte(DEV_SPI, DEV_CS_PIN, true, data);
+    return MLX90393_SUCCESS;
+}
+
+static int _read_byte(mlx90393_t *dev, void *buffer)
+{
+    *((uint8_t*)buffer) = spi_transfer_byte(DEV_SPI, DEV_CS_PIN, true, 0);
+    return MLX90393_SUCCESS;
+}
+
+static int _write_bytes(mlx90393_t *dev, void *data, size_t len)
+{
+    spi_transfer_bytes(DEV_SPI, DEV_CS_PIN, true, data, NULL, len);
+    return MLX90393_SUCCESS;
+}
+
+static int _read_bytes(mlx90393_t *dev, void *buffer, size_t len)
+{
+    spi_transfer_bytes(DEV_SPI, DEV_CS_PIN, true, NULL, buffer, len);
+    return MLX90393_SUCCESS;
+}
+
+#elif MODULE_MLX90393_I2C
+
+static int _init_bus(const mlx90393_t *dev)
+{
+    (void) dev;
+    return MLX90393_SUCCESS;
+}
+
+static void _acquire(mlx90393_t *dev)
+{
+    i2c_acquire(DEV_I2C);
+}
+
+static void _release(mlx90393_t *dev)
+{
+    i2c_release(DEV_I2C);
+}
+
+static int _write_byte(mlx90393_t *dev, uint8_t data)
+{
+    return i2c_write_byte(DEV_I2C, DEV_ADDR, data, 0) ? MLX90393_ERROR_I2C : MLX90393_SUCCESS;
+}
+
+static int _read_byte(mlx90393_t *dev, void *buffer)
+{
+    return i2c_read_byte(DEV_I2C, DEV_ADDR, buffer, 0) ? MLX90393_ERROR_I2C : MLX90393_SUCCESS;
+}
+
+static int _write_bytes(mlx90393_t *dev, void *data, size_t len)
+{
+    return i2c_write_bytes(DEV_I2C, DEV_ADDR, data, len, 0) ? MLX90393_ERROR_I2C : MLX90393_SUCCESS;
+}
+
+static int _read_bytes(mlx90393_t *dev, void *buffer, size_t len)
+{
+    return i2c_read_bytes(DEV_I2C, DEV_ADDR, buffer, len, 0) ? MLX90393_ERROR_I2C : MLX90393_SUCCESS;
+}
+
+#endif
+
+static int _check_status_byte(mlx90393_t *dev) 
+{
+    uint8_t status;
+    int error = 0;
+    if ((error = _read_byte(dev, &status)) != 0) {
+        return error;
+    }
+    return (status & MLX90393_STATUS_ERROR) ? MLX90393_ERROR : MLX90393_SUCCESS;
+}
+
+static int _write_register(mlx90393_t *dev, uint8_t addr, uint16_t value) 
 {
     uint8_t buffer[4];
     buffer[0] = MLX90393_COMMAND_WR;
     buffer[1] = (uint8_t) (value >> 8);
     buffer[2] = (uint8_t) (value & 0xFF);
     buffer[3] = addr << 2;
-
-    if (i2c_write_bytes(DEV_I2C, DEV_ADDR, buffer, 4, 0) != 0) {
-        return MLX90393_ERROR_I2C;
-    }
     int error = 0;
+    if ((error = _write_bytes(dev, buffer, 4)) != 0) {
+        return error;
+    }
     if ((error = _check_status_byte(dev)) != 0) {
         return error;
     }
     return MLX90393_SUCCESS;
 }
 
-int _read_register(mlx90393_t *dev, uint8_t addr, uint16_t *value)
+static int _read_register(mlx90393_t *dev, uint8_t addr, uint16_t *value)
 {
     uint8_t buffer_send[2];
     buffer_send[0] = MLX90393_COMMAND_RR;
     buffer_send[1] = addr << 2;
-
-    if (i2c_write_bytes(DEV_I2C, DEV_ADDR, buffer_send, 2, 0) != 0) {
-        return MLX90393_ERROR_I2C;
+    int error = 0;
+    if ((error = _write_bytes(dev, buffer_send, 2)) != 0) {
+        return error;
     }
     uint8_t buffer_receive[3];
-    if (i2c_read_bytes(DEV_I2C, DEV_ADDR, buffer_receive, 3, 0) != 0) {
-        return MLX90393_ERROR_I2C;
+    if ((error = _read_bytes(dev, buffer_receive, 3)) != 0) {
+        return error;
     }
     if (buffer_receive[0] & MLX90393_STATUS_ERROR) {
         return MLX90393_ERROR;
@@ -86,7 +172,7 @@ int _read_register(mlx90393_t *dev, uint8_t addr, uint16_t *value)
     return MLX90393_SUCCESS;
 }
 
-int _write_register_bits(mlx90393_t *dev, uint8_t addr, uint16_t mask, uint16_t value) 
+static int _write_register_bits(mlx90393_t *dev, uint8_t addr, uint16_t mask, uint16_t value) 
 {
     uint16_t reg_value;
     int error = 0;
@@ -101,12 +187,12 @@ int _write_register_bits(mlx90393_t *dev, uint8_t addr, uint16_t mask, uint16_t 
     return MLX90393_SUCCESS;
 }
 
-int _calculate_temp(uint16_t raw_temp, uint16_t ref_temp)
+static int _calculate_temp(uint16_t raw_temp, uint16_t ref_temp)
 {
     return (MLX90393_TEMP_OFFSET + (raw_temp - ref_temp) / MLX90393_TEMP_RESOLUTION) * 100;
 }
 
-float _get_gain_factor(mlx90393_gain_t gain)
+static float _get_gain_factor(mlx90393_gain_t gain)
 {
     switch (gain)
     {
@@ -133,21 +219,27 @@ float _get_gain_factor(mlx90393_gain_t gain)
 
 int mlx90393_init(mlx90393_t *dev, const mlx90393_params_t *params)
 {
+    assert(dev);
+    assert(params);
     dev->params = *params;
     int error = 0;
-    i2c_acquire(DEV_I2C);
+    if ((error = _init_bus(dev)) != 0) {
+        return error;
+    }
+    _acquire(dev);
 
     /* reset mlx90393 */
-    if (i2c_write_byte(DEV_I2C, DEV_ADDR, MLX90393_COMMAND_EX, 0) != 0) {
-        i2c_release(DEV_I2C);
-        return MLX90393_ERROR_I2C;
+    if ((error = _write_byte(dev, MLX90393_COMMAND_EX)) != 0) {
+        _release(dev);
+        return error;
     }
     if ((error = _check_status_byte(dev)) != 0) {
+        _release(dev);
         return error;
     }
     ztimer_sleep(ZTIMER_USEC, MLX90393_COMMAND_EX_TIMEOUT);
-    if (i2c_write_byte(DEV_I2C, DEV_ADDR, MLX90393_COMMAND_RT, 0) != 0) {
-        i2c_release(DEV_I2C);
+    if (_write_byte(dev, MLX90393_COMMAND_RT) != 0) {
+        _release(dev);
         return MLX90393_ERROR_I2C;
     }
     error = _check_status_byte(dev);
@@ -157,20 +249,20 @@ int mlx90393_init(mlx90393_t *dev, const mlx90393_params_t *params)
     ztimer_sleep(ZTIMER_USEC, MLX90393_COMMAND_RT_TIMEOUT);
     /* store ref temp in dev */
     if ((error = _read_register(dev, MLX90393_REG_REF_TEMP, &dev->ref_temp)) != 0) {
-        i2c_release(DEV_I2C);
+        _release(dev);
         return error;
     }
     /* gain */
     if ((error = _write_register_bits(dev, MLX90393_REG_CONF0, MLX90393_MASK_GAIN_SEL, DEV_GAIN)) != 0) {
-        i2c_release(DEV_I2C);
+        _release(dev);
         return error;
     }
     /* resolution */
-    uint16_t xyz_resolution_value_mask = (DEV_RESOLUTION << 9) | 
+    uint16_t xyz_resolution_value_mask = (DEV_RESOLUTION << 9) |
                                          (DEV_RESOLUTION << 7) |
                                          (DEV_RESOLUTION << 5);
     if ((error = _write_register_bits(dev, MLX90393_REG_CONF2, MLX90393_MASK_RES_XYZ, xyz_resolution_value_mask)) != 0) {
-        i2c_release(DEV_I2C);
+        _release(dev);
         return error;
     }
     /* temp compensation / offset */
@@ -182,20 +274,20 @@ int mlx90393_init(mlx90393_t *dev, const mlx90393_params_t *params)
 
         /* enable temp compensation */
         if ((error = _write_register_bits(dev, MLX90393_REG_CONF1, MLX90393_MASK_TCMP_EN, 0x400)) != 0) {
-            i2c_release(DEV_I2C);
+            _release(dev);
             return error;
         }
         /* set offsets */
-        if ((error = _write_register(dev, MLX90393_REG_OFFSET_X, offset_x))) {
-            i2c_release(DEV_I2C);
+        if ((error = _write_register(dev, MLX90393_REG_OFFSET_X, offset_x)) != 0) {
+            _release(dev);
             return error;
         }
-        if ((error = _write_register(dev, MLX90393_REG_OFFSET_Y, offset_y))) {
-            i2c_release(DEV_I2C);
+        if ((error = _write_register(dev, MLX90393_REG_OFFSET_Y, offset_y)) != 0) {
+            _release(dev);
             return error;
         }
-        if ((error = _write_register(dev, MLX90393_REG_OFFSET_Z, offset_z))) {
-            i2c_release(DEV_I2C);
+        if ((error = _write_register(dev, MLX90393_REG_OFFSET_Z, offset_z)) != 0) {
+            _release(dev);
             return error;
         }
     }
@@ -203,21 +295,23 @@ int mlx90393_init(mlx90393_t *dev, const mlx90393_params_t *params)
     if (DEV_MODE == MLX90393_MODE_BURST) {
         /* set burst data rate */
         if ((error = _write_register_bits(dev, MLX90393_REG_CONF1, MLX90393_MASK_BDR, DEV_ODR)) != 0) {
-            i2c_release(DEV_I2C);
+            _release(dev);
             return error;
         }
         /* start burst mode */
-        if (i2c_write_byte(DEV_I2C, DEV_ADDR, MLX90393_COMMAND_SB, 0) != 0) {
-            i2c_release(DEV_I2C);
-            return MLX90393_ERROR_I2C;
+        if ((error = _write_byte(dev, MLX90393_COMMAND_SB)) != 0) {
+            _release(dev);
+            return error;
         }
         if ((error = _check_status_byte(dev)) != 0) {
+            _release(dev);
             return error;
         }
     }
     /* wake up on change mode */
     else if (DEV_MODE == MLX90393_MODE_WAKE_UP_ON_CHANGE_ABSOLUTE || DEV_MODE == MLX90393_MODE_WAKE_UP_ON_CHANGE_RELATIVE) {
-        if (!gpio_is_valid(DEV_PIN)) {
+        if (!gpio_is_valid(DEV_INT_PIN)) {
+            _release(dev);
             return MLX90393_ERROR_NO_PIN;
         }
         /* set absolute or relative wake up on change mode */
@@ -226,12 +320,12 @@ int mlx90393_init(mlx90393_t *dev, const mlx90393_params_t *params)
             wake_up_on_chane_mode = 1;
         }
         if ((error = _write_register_bits(dev, MLX90393_REG_CONF1, MLX90393_MASK_WOC_DIFF, wake_up_on_chane_mode))) {
-            i2c_release(DEV_I2C);
+            _release(dev);
             return error;
         }
         /* set burst data rate */
         if ((error = _write_register_bits(dev, MLX90393_REG_CONF1, MLX90393_MASK_BDR, DEV_ODR)) != 0) {
-            i2c_release(DEV_I2C);
+            _release(dev);
             return error;
         }
         /* set tresholds */
@@ -241,28 +335,29 @@ int mlx90393_init(mlx90393_t *dev, const mlx90393_params_t *params)
         uint16_t raw_temp_threshold = dev->params.treshold.temp * MLX90393_TEMP_RESOLUTION / 100;
 
         if ((error = _write_register(dev, MLX90393_REG_WOXY_THRESHOLD, raw_xy_threshold))) {
-            i2c_release(DEV_I2C);
+            _release(dev);
             return error;
         }
         if ((error = _write_register(dev, MLX90393_REG_WOZ_THRESHOLD, raw_z_threshold))) {
-            i2c_release(DEV_I2C);
+            _release(dev);
             return error;
         }
         if ((error = _write_register(dev, MLX90393_REG_WOT_THRESHOLD, raw_temp_threshold))) {
-            i2c_release(DEV_I2C);
+            _release(dev);
             return error;
         }
         /* set wake up on change mode */
-        if (i2c_write_byte(DEV_I2C, DEV_ADDR, MLX90393_COMMAND_SW, 0) != 0) {
-            i2c_release(DEV_I2C);
-            return MLX90393_ERROR_I2C;
+        if ((error = _write_byte(dev, MLX90393_COMMAND_SW)) != 0) {
+            _release(dev);
+            return error;
         }
         if((error = _check_status_byte(dev)) != 0) {
+            _release(dev);
             return error;
         }
     }
 
-    i2c_release(DEV_I2C);
+    _release(dev);
     return MLX90393_SUCCESS;
 }
 
@@ -273,44 +368,44 @@ static void _isr(void *lock)
 
 int mlx90393_read_measurement(mlx90393_t *dev, mlx90393_3d_data_t *data) 
 {
-    i2c_acquire(DEV_I2C);
+    _acquire(dev);
     int error = 0;
 
     /* start single measurement */
     if (DEV_MODE == MLX90393_MODE_SINGLE_MEASUREMENT) {
-        if (i2c_write_byte(DEV_I2C, DEV_ADDR, MLX90393_COMMAND_SM, 0) != 0) {
-            i2c_release(DEV_I2C);
-            return MLX90393_ERROR_I2C;
+        if ((error = _write_byte(dev, MLX90393_COMMAND_SM)) != 0) {
+            _release(dev);
+            return error;
         }
         if ((error = _check_status_byte(dev)) != 0) {
             return error;
         }
     }
-    i2c_release(DEV_I2C);
+    _release(dev);
 
     /* wait for interrupt if used */
-    if (gpio_is_valid(DEV_PIN)) {
+    if (gpio_is_valid(DEV_INT_PIN)) {
         mutex_t lock = MUTEX_INIT_LOCKED;
-        gpio_init_int(DEV_PIN, GPIO_IN_PU, GPIO_RISING, _isr, &lock);
+        gpio_init_int(DEV_INT_PIN, GPIO_IN_PU, GPIO_RISING, _isr, &lock);
         mutex_lock(&lock);
-        gpio_irq_disable(DEV_PIN);
+        gpio_irq_disable(DEV_INT_PIN);
     }
 
-    i2c_acquire(DEV_I2C);
+    _acquire(dev);
 
     /* read measurement */
-    if (i2c_write_byte(DEV_I2C, DEV_ADDR, MLX90393_COMMAND_RM, 0) != 0) {
-        i2c_release(DEV_I2C);
-        return MLX90393_ERROR_I2C;
+    if ((error = _write_byte(dev, MLX90393_COMMAND_RM)) != 0) {
+        _release(dev);
+        return error;
     }
     /* check status byte */
     uint8_t buffer[9];
-    if (i2c_read_bytes(DEV_I2C, DEV_ADDR, buffer, 9, 0) != 0) {
-        i2c_release(DEV_I2C);
-        return MLX90393_ERROR_I2C;
+    if ((error = _read_bytes(dev, buffer, 9)) != 0) {
+        _release(dev);
+        return error;
     }
     if (buffer[0] & MLX90393_STATUS_ERROR) {
-        i2c_release(DEV_I2C);
+        _release(dev);
         return MLX90393_ERROR;
     }
     /* convert read data */
@@ -327,27 +422,19 @@ int mlx90393_read_measurement(mlx90393_t *dev, mlx90393_3d_data_t *data)
     data->y_axis = (int)raw_y * gain * MLX90393_XY_SENS * (1 << DEV_RESOLUTION);
     data->z_axis = (int)raw_z * gain * MLX90393_Z_SENS * (1 << DEV_RESOLUTION);
 
-    i2c_release(DEV_I2C);
+    _release(dev);
     return MLX90393_SUCCESS;
 }
 
 int mlx90393_reset(mlx90393_t *dev)
 {
-    i2c_acquire(DEV_I2C);
+    _acquire(dev);
 
-    if (i2c_write_byte(DEV_I2C, DEV_ADDR, MLX90393_COMMAND_RT, 0) != 0) {
-        i2c_release(DEV_I2C);
-        return MLX90393_ERROR_I2C;
+    int error = 0;
+    if ((error = _write_byte(dev, MLX90393_COMMAND_RT)) != 0) {
+        _release(dev);
+        return error;
     }
-    uint8_t status;
-    if (i2c_read_byte(DEV_I2C, DEV_ADDR, &status, 0) != 0) {
-        i2c_release(DEV_I2C);
-        return MLX90393_ERROR_I2C;
-    }
-    i2c_release(DEV_I2C);
-    if (status != MLX90393_STATUS_RESET)
-        return MLX90393_ERROR;
-
-    return MLX90393_SUCCESS;
+    return _check_status_byte(dev);
 }
 

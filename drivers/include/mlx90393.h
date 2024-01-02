@@ -21,8 +21,12 @@
 #ifndef MLX90393_H
 #define MLX90393_H
 
-#include "periph/i2c.h"
 #include "periph/gpio.h"
+#if MODULE_MLX90393_SPI
+#include "periph/spi.h"
+#elif MODULE_MLX90393_I2C
+#include "periph/i2c.h"
+#endif
 
 /* Add header includes here */
 
@@ -99,9 +103,14 @@ typedef struct {
  * @brief   Device initialization parameters
  */
 typedef struct {
+#if MODULE_MLX90393_SPI
+    spi_t spi;
+    gpio_t cs_pin;                  /** connected chip select pin */
+#elif MODULE_MLX90393_I2C
     i2c_t i2c;                      /** I2C device */
     uint8_t addr;                   /** Magnometer I2C address */
-    mlx90393_mode_t mode;           /**  */
+#endif
+    mlx90393_mode_t mode;           
     gpio_t int_pin;
     mlx90393_gain_t gain;
     mlx90393_resolution_t resolution;

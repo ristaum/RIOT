@@ -1,5 +1,14 @@
-FEATURES_REQUIRED += periph_gpio
-FEATURES_REQUIRED += periph_gpio_irq
-FEATURES_REQUIRED += periph_i2c
-USEMODULE += ztimer
-USEMODULE += ztimer_usec
+ifneq (,$(filter mlx90393,$(USEMODULE)))
+  FEATURES_REQUIRED += periph_gpio
+  FEATURES_REQUIRED += periph_gpio_irq
+  USEMODULE += ztimer
+  USEMODULE += ztimer_usec
+endif
+
+ifneq (,$(filter mlx90393_i2c,$(USEMODULE)))
+  FEATURES_REQUIRED += periph_i2c
+endif
+
+ifneq (,$(filter mlx90393_spi,$(USEMODULE)))
+  FEATURES_REQUIRED += periph_spi
+endif
