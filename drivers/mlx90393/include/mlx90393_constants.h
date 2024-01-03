@@ -81,10 +81,10 @@ extern "C" //{
  * @brief 
  * 
  */
-#define MLX90393_TEMP_OFFSET        35
-#define MLX90393_TEMP_RESOLUTION    45.2
-#define MLX90393_XY_SENS            0.15
-#define MLX90393_Z_SENS             0.242
+#define MLX90393_TEMP_OFFSET        3500
+#define MLX90393_TEMP_RESOLUTION    452
+#define MLX90393_XY_SENS            150
+#define MLX90393_Z_SENS             242
 
 #ifdef __cplusplus
 //}

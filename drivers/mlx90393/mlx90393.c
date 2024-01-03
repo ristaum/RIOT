@@ -189,29 +189,29 @@ static int _write_register_bits(mlx90393_t *dev, uint8_t addr, uint16_t mask, ui
 
 static int _calculate_temp(uint16_t raw_temp, uint16_t ref_temp)
 {
-    return (MLX90393_TEMP_OFFSET + (raw_temp - ref_temp) / MLX90393_TEMP_RESOLUTION) * 100;
+    return (MLX90393_TEMP_OFFSET + (((raw_temp - ref_temp) * 1000) / MLX90393_TEMP_RESOLUTION));
 }
 
-static float _get_gain_factor(mlx90393_gain_t gain)
+static int _get_gain_factor(mlx90393_gain_t gain)
 {
     switch (gain)
     {
     case MLX90393_GAIN_5X:
-        return 5.0f;
+        return 500;
     case MLX90393_GAIN_4X:
-        return 4.0f;
+        return 400;
     case MLX90393_GAIN_3X:
-        return 3.0f;
+        return 300;
     case MLX90393_GAIN_2_5X:
-        return 2.5f;
+        return 250;
     case MLX90393_GAIN_2X:
-        return 2.0f;
+        return 200;
     case MLX90393_GAIN_1_67X:
-        return 1.6666667f;
+        return 167;
     case MLX90393_GAIN_1_33X:
-        return 1.3333333f;
+        return 133;
     case MLX90393_GAIN_1X:
-        return 1.0f;
+        return 100;
     default:
         return -1;
     }
@@ -418,9 +418,9 @@ int mlx90393_read_measurement(mlx90393_t *dev, mlx90393_3d_data_t *data)
 
     data->temp = _calculate_temp(raw_temp, dev->ref_temp);
     float gain = _get_gain_factor(DEV_GAIN);
-    data->x_axis = (int)raw_x * gain * MLX90393_XY_SENS * (1 << DEV_RESOLUTION);
-    data->y_axis = (int)raw_y * gain * MLX90393_XY_SENS * (1 << DEV_RESOLUTION);
-    data->z_axis = (int)raw_z * gain * MLX90393_Z_SENS * (1 << DEV_RESOLUTION);
+    data->x_axis = (int)raw_x * gain * MLX90393_XY_SENS * (1 << DEV_RESOLUTION) / 100000;
+    data->y_axis = (int)raw_y * gain * MLX90393_XY_SENS * (1 << DEV_RESOLUTION) / 100000;
+    data->z_axis = (int)raw_z * gain * MLX90393_Z_SENS * (1 << DEV_RESOLUTION) / 100000;
 
     _release(dev);
     return MLX90393_SUCCESS;
