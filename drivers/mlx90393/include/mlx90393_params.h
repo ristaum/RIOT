@@ -11,7 +11,7 @@
  *
  * @{
  * @file
- * @brief       Default configuration
+ * @brief       Default configuration for MLX90393 device driver
  *
  * @author      Michael Ristau <michael.ristau@fh-erfurt.de>
  */
@@ -28,24 +28,87 @@ extern "C" {
 #endif
 
 /**
- * @name    Set default configuration parameters
+ * @name    Set default configuration parameters for the MLX90393
  * @{
  */
-#ifndef MLX90393_PARAM_PARAM1
-#define MLX90393_PARAM_PARAM1
+#ifndef MLX90393_PARAM_INT_PIN
+#define MLX90393_PARAM_INT_PIN      (GPIO_PIN(PORT_C, 8))
 #endif
 
-#ifndef MLX90393_PARAMS
-#define MLX90393_PARAMS
+#ifndef MLX90393_PARAM_OFFSET
+#define MLX90393_PARAM_OFFSET                       \
+{                                                   \
+    .x              = 0,                            \
+    .y              = 0,                            \
+    .z              = 0                             \
+}
+#endif
+
+#ifndef MLX90393_PARAM_THRESHOLD
+#define MLX90393_PARAM_THRESHOLD                    \
+{                                                   \
+    .xy             = 0,                            \
+    .z              = 0,                            \
+    .temp           = 0                             \
+}
+#endif
+
+/* default configuration for SPI mode */
+#if MODULE_MLX90393_SPI
+#ifndef MLX90393_PARAM_SPI_CS_PIN
+#define MLX90393_PARAM_SPI_CS_PIN    (GPIO_PIN(PORT_C, 6))
+#endif
+
+#ifndef MLX90393_PARAMS_SPI
+#define MLX90393_PARAMS_SPI                         \
+{                                                   \
+    .spi            = SPI_DEV(0),                   \
+    .cs_pin         = MLX90393_PARAM_SPI_CS_PIN,    \
+    .mode           = MLX90393_MODE_BURST,          \
+    .int_pin        = MLX90393_PARAM_INT_PIN,       \
+    .gain           = MLX90393_GAIN_1X,             \
+    .resolution     = MLX90393_RES_19,              \
+    .temp_comp      = MLX90393_TEMP_COMP_OFF,       \
+    .offset         = MLX90393_PARAM_OFFSET,        \
+    .odr            = MLX90393_ODR_10HZ,            \
+    .treshold       = MLX90393_PARAM_THRESHOLD      \
+}
+#endif
+
+/* default configuration for I2C mode */
+#elif MODULE_MLX90393_I2C
+#ifndef MLX90393_PARAM_I2C_ADDR
+#define MLX90393_PARAM_I2C_ADDR       (0x0C)
+#endif
+
+#ifndef MLX90393_PARAMS_I2C
+#define MLX90393_PARAMS_I2C                         \
+{                                                   \
+    .i2c            = I2C_DEV(0),                   \
+    .addr           = MLX90393_PARAM_I2C_ADDR,      \
+    .mode           = MLX90393_MODE_BURST,          \
+    .int_pin        = MLX90393_PARAM_INT_PIN,       \
+    .gain           = MLX90393_GAIN_1X,             \
+    .resolution     = MLX90393_RES_19,              \
+    .temp_comp      = MLX90393_TEMP_COMP_OFF,       \
+    .offset         = MLX90393_PARAM_OFFSET,        \
+    .odr            = MLX90393_ODR_10HZ,            \
+    .treshold       = MLX90393_PARAM_THRESHOLD      \
+}
+#endif
 #endif
 /**@}*/
 
 /**
- * @brief   Configuration struct
+ * @brief   Configure params for MLX90393
  */
 static const mlx90393_params_t mlx90393_params[] =
 {
-    MLX90393_PARAMS
+#if MODULE_MLX90393_SPI
+    MLX90393_PARAMS_SPI
+#elif MODULE_MLX90393_I2C
+    MLX90393_PARAMS_I2C
+#endif
 };
 
 #ifdef __cplusplus

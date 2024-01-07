@@ -39,6 +39,7 @@
 #define DEV_X_OFFSET        (dev->params.offset.x)
 #define DEV_Y_OFFSET        (dev->params.offset.y)
 #define DEV_Z_OFFSET        (dev->params.offset.z)
+#define CONN_TEST_DATA      (0xAF03)
 
 #if MODULE_MLX90393_SPI
 
@@ -217,6 +218,18 @@ static int _get_gain_factor(mlx90393_gain_t gain)
     }
 }
 
+static int _is_avaiable(mlx90393_t *dev) {
+    int error = 0;
+    if ((error = _write_register(dev, MLX90393_REG_CONN_TEST, CONN_TEST_DATA)) != MLX90393_SUCCESS) {
+        return error;
+    }
+    uint16_t buffer = 0x00;
+    if ((error = _read_register(dev, MLX90393_REG_CONN_TEST, &buffer)) != MLX90393_SUCCESS) {
+        return error;
+    }
+    return buffer == CONN_TEST_DATA ? MLX90393_SUCCESS : MLX90393_ERROR_NOT_AVAILABLE;
+}
+
 int mlx90393_init(mlx90393_t *dev, const mlx90393_params_t *params)
 {
     assert(dev);
@@ -227,8 +240,8 @@ int mlx90393_init(mlx90393_t *dev, const mlx90393_params_t *params)
         return error;
     }
     _acquire(dev);
-
-    /* reset mlx90393 */
+    
+    /* exit all continuous measurement modes */
     if ((error = _write_byte(dev, MLX90393_COMMAND_EX)) != 0) {
         _release(dev);
         return error;
@@ -238,6 +251,7 @@ int mlx90393_init(mlx90393_t *dev, const mlx90393_params_t *params)
         return error;
     }
     ztimer_sleep(ZTIMER_USEC, MLX90393_COMMAND_EX_TIMEOUT);
+    /* reset mlx90393 */
     if (_write_byte(dev, MLX90393_COMMAND_RT) != 0) {
         _release(dev);
         return MLX90393_ERROR_I2C;
@@ -247,6 +261,10 @@ int mlx90393_init(mlx90393_t *dev, const mlx90393_params_t *params)
         return error;
     }
     ztimer_sleep(ZTIMER_USEC, MLX90393_COMMAND_RT_TIMEOUT);
+    /* check availability of the sensor */
+    if ((error = _is_avaiable(dev)) != MLX90393_SUCCESS) {
+        return error;
+    }
     /* store ref temp in dev */
     if ((error = _read_register(dev, MLX90393_REG_REF_TEMP, &dev->ref_temp)) != 0) {
         _release(dev);
