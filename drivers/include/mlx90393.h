@@ -38,17 +38,17 @@ extern "C" //{
  * @brief   3d data container of the MLX90393 sensor
  */
 typedef struct {
-    int x_axis;                  /** Magnometer data from x-axis */
-    int y_axis;                  /** Magnometer data from y_axis */
-    int z_axis;                  /** Magnometer data from z_axis */
-    int temp;
-} mlx90393_3d_data_t;
+    int16_t x_axis;                  /** Magnometer data from x-axis */
+    int16_t y_axis;                  /** Magnometer data from y_axis */
+    int16_t z_axis;                  /** Magnometer data from z_axis */
+    int16_t temp;
+} mlx90393_data_t;
 
 typedef enum {
     MLX90393_MODE_BURST,
     MLX90393_MODE_SINGLE_MEASUREMENT,
     MLX90393_MODE_WAKE_UP_ON_CHANGE_ABSOLUTE,
-    MLX90393_MODE_WAKE_UP_ON_CHANGE_RELATIVE
+    MLX90393_MODE_WAKE_UP_ON_CHANGE_RELATIVE,
 } mlx90393_mode_t;
 
 typedef enum {
@@ -61,14 +61,8 @@ typedef enum {
     MLX90393_ODR_2_5HZ = 0x14,
     MLX90393_ODR_2HZ = 0x19,
     MLX90393_ODR_1_25HZ = 0x28,
-    MLX90393_ODR_1HZ = 0x32
+    MLX90393_ODR_1HZ = 0x32,
 } mlx90393_odr_t;
-
-typedef struct {
-    int xy;
-    int z;
-    int temp;
-} mlx90393_treshold_t;
 
 typedef enum {
     MLX90393_GAIN_5X,
@@ -78,7 +72,7 @@ typedef enum {
     MLX90393_GAIN_2X,
     MLX90393_GAIN_1_67X,
     MLX90393_GAIN_1_33X,
-    MLX90393_GAIN_1X
+    MLX90393_GAIN_1X,
 } mlx90393_gain_t;
 
 typedef enum {
@@ -89,23 +83,42 @@ typedef enum {
 } mlx90393_resolution_t;
 
 typedef enum {
-    MLX90393_TEMP_COMP_OFF,
-    MLX90393_TEMP_COMP_ON
-} mlx90393_temp_comp_t;
+    MLX90393_OSR_0,
+    MLX90393_OSR_1,
+    MLX90393_OSR_2,
+    MLX90393_OSR_3,
+} mlx90393_oversampling_ratio_t;
+
+typedef enum {
+    MLX90393_DIG_FILT_0,
+    MLX90393_DIG_FILT_1,
+    MLX90393_DIG_FILT_2,
+    MLX90393_DIG_FILT_3,
+    MLX90393_DIG_FILT_4,
+    MLX90393_DIG_FILT_5,
+    MLX90393_DIG_FILT_6,
+    MLX90393_DIG_FILT_7,
+} mlx90393_digital_filter_t;
 
 typedef struct {
-    int16_t x;
-    int16_t y;
-    int16_t z;
-} mlx90393_offset_t;
+    mlx90393_oversampling_ratio_t mag;
+    mlx90393_oversampling_ratio_t temp;
+} mlx90393_oversampling_t;
+
+typedef struct {
+    int xy;
+    int z;
+    int temp;
+} mlx90393_treshold_t;
 
 /**
  * @brief   Device initialization parameters
  */
 typedef struct {
 #if MODULE_MLX90393_SPI
-    spi_t spi;
-    gpio_t cs_pin;                  /** connected chip select pin */
+    spi_t spi;                      /**< SPI bus */
+    gpio_t cs_pin;                  /**< Connected chip select pin */
+    spi_clk_t clk;                  /**< clock speed for the SPI bus */
 #elif MODULE_MLX90393_I2C
     i2c_t i2c;                      /** I2C device */
     uint8_t addr;                   /** Magnometer I2C address */
@@ -114,9 +127,9 @@ typedef struct {
     gpio_t int_pin;
     mlx90393_gain_t gain;
     mlx90393_resolution_t resolution;
-    mlx90393_temp_comp_t temp_comp;
-    mlx90393_offset_t offset;
     mlx90393_odr_t odr;
+    mlx90393_oversampling_t oversampling;
+    mlx90393_digital_filter_t dig_filt;
     mlx90393_treshold_t treshold;
 } mlx90393_params_t;
 
@@ -127,6 +140,7 @@ typedef struct {
     /** Device initialization parameters */
     mlx90393_params_t params;
     uint16_t ref_temp;
+    int conversion_time;
 } mlx90393_t;
 
 enum {
@@ -148,9 +162,13 @@ enum {
  */
 int mlx90393_init(mlx90393_t *dev, const mlx90393_params_t *params);
 
-int mlx90393_read_measurement(mlx90393_t *dev, mlx90393_3d_data_t *data);
+int mlx90393_read(mlx90393_t *dev, mlx90393_data_t *data);
 
 int mlx90393_reset(mlx90393_t *dev);
+
+int mlx90393_stop_cont(mlx90393_t *dev);
+
+int mlx90393_start_cont(mlx90393_t *dev);
 
 #ifdef __cplusplus
 //}

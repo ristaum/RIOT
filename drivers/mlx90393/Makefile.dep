@@ -2,7 +2,7 @@ ifneq (,$(filter mlx90393,$(USEMODULE)))
   FEATURES_REQUIRED += periph_gpio
   FEATURES_REQUIRED += periph_gpio_irq
   USEMODULE += ztimer
-  USEMODULE += ztimer_usec
+  USEMODULE += ztimer_msec
 endif
 
 ifneq (,$(filter mlx90393_i2c,$(USEMODULE)))

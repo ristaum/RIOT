@@ -31,19 +31,39 @@ extern "C" {
  * @name    Set default configuration parameters for the MLX90393
  * @{
  */
-#ifndef MLX90393_PARAM_INT_PIN
-#define MLX90393_PARAM_INT_PIN      (GPIO_PIN(PORT_C, 8))
+/* Default measurement mode */
+#ifndef MLX90393_PARAM_MODE
+#define MLX90393_PARAM_MODE             (MLX90393_MODE_BURST)
 #endif
-
-#ifndef MLX90393_PARAM_OFFSET
-#define MLX90393_PARAM_OFFSET                       \
+/* Default interrupt pin */
+#ifndef MLX90393_PARAM_INT_PIN
+#define MLX90393_PARAM_INT_PIN          (GPIO_PIN(PORT_C, 8))
+#endif
+/* Default gain */
+#ifndef MLX90393_PARAM_GAIN
+#define MLX90393_PARAM_GAIN             (MLX90393_GAIN_1X)
+#endif
+/* Default resolution */
+#ifndef MLX90393_PARAM_RES
+#define MLX90393_PARAM_RES              (MLX90393_RES_19)
+#endif
+/* Default sampling rate */
+#ifndef MLX90393_PARAM_ODR
+#define MLX90393_PARAM_ODR              (MLX90393_ODR_10HZ)
+#endif
+/* Default oversampling ratio */
+#ifndef MLX90393_PARAM_OSR
+#define MLX90393_PARAM_OSR                          \
 {                                                   \
-    .x              = 0,                            \
-    .y              = 0,                            \
-    .z              = 0                             \
+    .mag            = MLX90393_OSR_1,               \
+    .temp           = MLX90393_OSR_1                \
 }
 #endif
-
+/* Default digital filter */
+#ifndef MLX90393_PARAM_DIG_FILT
+#define MLX90393_PARAM_DIG_FILT         (MLX90393_DIG_FILT_1)
+#endif
+/* Default thresholds for Wake-up On Change mode */
 #ifndef MLX90393_PARAM_THRESHOLD
 #define MLX90393_PARAM_THRESHOLD                    \
 {                                                   \
@@ -53,46 +73,61 @@ extern "C" {
 }
 #endif
 
-/* default configuration for SPI mode */
+/* Default configuration for SPI mode */
 #if MODULE_MLX90393_SPI
-#ifndef MLX90393_PARAM_SPI_CS_PIN
-#define MLX90393_PARAM_SPI_CS_PIN    (GPIO_PIN(PORT_C, 6))
+/* Default SPI device */
+#ifndef MLX90393_PARAM_SPI
+#define MLX90393_PARAM_SPI              (SPI_DEV(0))
 #endif
-
+/* Default SPI chip select pin */
+#ifndef MLX90393_PARAM_SPI_CS_PIN
+#define MLX90393_PARAM_SPI_CS_PIN       (GPIO_PIN(PORT_C, 6))
+#endif
+/* Default SPI clock speed */
+#ifndef MLX90393_PARAM_SPI_CLK
+#define MLX90393_PARAM_SPI_CLK          (SPI_CLK_10MHZ)
+#endif
+/* Default SPI params */
 #ifndef MLX90393_PARAMS_SPI
 #define MLX90393_PARAMS_SPI                         \
 {                                                   \
-    .spi            = SPI_DEV(0),                   \
+    .spi            = MLX90393_PARAM_SPI,           \
     .cs_pin         = MLX90393_PARAM_SPI_CS_PIN,    \
-    .mode           = MLX90393_MODE_BURST,          \
+    .clk            = MLX90393_PARAM_SPI_CLK;       \
+    .mode           = MLX90393_PARAM_MODE,          \
     .int_pin        = MLX90393_PARAM_INT_PIN,       \
-    .gain           = MLX90393_GAIN_1X,             \
-    .resolution     = MLX90393_RES_19,              \
-    .temp_comp      = MLX90393_TEMP_COMP_OFF,       \
-    .offset         = MLX90393_PARAM_OFFSET,        \
-    .odr            = MLX90393_ODR_10HZ,            \
+    .gain           = MLX90393_PARAM_GAIN,          \
+    .resolution     = MLX90393_PARAM_RES,           \
+    .odr            = MLX90393_PARAM_ODR,           \
+    .oversampling   = MLX90393_PARAM_OSR,           \
+    .dig_filt       = MLX90393_PARAM_DIG_FILT,      \
     .treshold       = MLX90393_PARAM_THRESHOLD      \
 }
 #endif
 
-/* default configuration for I2C mode */
+/* Default configuration for I2C mode */
 #elif MODULE_MLX90393_I2C
+/* Default I2C device */
+#ifndef MLX90393_PARAM_I2C
+#define MLX90393_PARAM_I2C            (I2C_DEV(0))
+#endif
+/* Default I2C device address */
 #ifndef MLX90393_PARAM_I2C_ADDR
 #define MLX90393_PARAM_I2C_ADDR       (0x0C)
 #endif
-
+/* Default I2C params */
 #ifndef MLX90393_PARAMS_I2C
 #define MLX90393_PARAMS_I2C                         \
 {                                                   \
-    .i2c            = I2C_DEV(0),                   \
+    .i2c            = MLX90393_PARAM_I2C,           \
     .addr           = MLX90393_PARAM_I2C_ADDR,      \
-    .mode           = MLX90393_MODE_BURST,          \
+    .mode           = MLX90393_PARAM_MODE,          \
     .int_pin        = MLX90393_PARAM_INT_PIN,       \
-    .gain           = MLX90393_GAIN_1X,             \
-    .resolution     = MLX90393_RES_19,              \
-    .temp_comp      = MLX90393_TEMP_COMP_OFF,       \
-    .offset         = MLX90393_PARAM_OFFSET,        \
-    .odr            = MLX90393_ODR_10HZ,            \
+    .gain           = MLX90393_PARAM_GAIN,          \
+    .resolution     = MLX90393_PARAM_RES,           \
+    .odr            = MLX90393_PARAM_ODR,           \
+    .oversampling   = MLX90393_PARAM_OSR,           \
+    .dig_filt       = MLX90393_PARAM_DIG_FILT,      \
     .treshold       = MLX90393_PARAM_THRESHOLD      \
 }
 #endif

@@ -11,7 +11,7 @@
  * @{
  *
  * @file
- * @brief       MLX90393 nternal addresses, registers and constants
+ * @brief       MLX90393 internal addresses, registers and constants
  *
  * @author      Michael Ristau <michael.ristau@fh-erfurt.de>
  */
@@ -48,6 +48,20 @@ extern "C" //{
 #define MLX90393_MASK_GAIN_SEL      0x0070  /**< analog chain gain **/
 #define MLX90393_MASK_RES_XYZ       0x07E0  /**< xyz resolution **/
 #define MLX90393_MASK_COMM_MODE     0x6000  /**< set allowed bus communication (I2C or SPI) **/
+#define MLX90393_MASK_OSR           0x0003  /**< oversampling ratio magnetic sensor **/
+#define MLX90393_MASK_OSR2          0x1800  /**< oversampling ratio temperature **/
+#define MLX90393_MASK_DIG_FILT      0x001C  /**< digital filter magnetic sensor **/
+
+/**
+ * @brief   Number of left shifts in configuration registers
+ */
+#define MLX90393_SHIFT_OSR2         11      /**< oversampling ratio temperature **/
+#define MLX90393_SHIFT_DIG_FILT     2       /**< digital filter magnetic sensor **/
+#define MLX90393_SHIFT_GAIN         4       /**< analog chain gain **/
+#define MLX90393_SHIFT_RES_X        5       /**< x resolution **/
+#define MLX90393_SHIFT_RES_Y        7       /**< y resolution **/
+#define MLX90393_SHIFT_RES_Z        9       /**< z resolution **/
+#define MLX90393_SHIFT_WOC_MODE     12      /**< wake-up on change mode **/
 
 /**
  * @brief   Command Set
@@ -71,22 +85,29 @@ extern "C" //{
 #define MLX90393_STATUS_ERROR       0x10    /**< error bit **/
 
 /**
- * @brief   Timeout durations in us
+ * @brief   Timeout durations in ms
  */
-#define MLX90393_COMMAND_EX_TIMEOUT     1000    /**< Timeout after exit command **/
-#define MLX90393_COMMAND_RT_TIMEOUT     1500    /**< Timeout after reset command **/
+#define MLX90393_COMMAND_EX_TIMEOUT     1    /**< Timeout after exit command **/
+#define MLX90393_COMMAND_RT_TIMEOUT     2    /**< Timeout after reset command **/
 
 /**
  * @brief   Temperature conversion constants
  */
-#define MLX90393_TEMP_OFFSET        3500    /**< Temperature offset (35 * 100 for avoiding float values) **/
+#define MLX90393_TEMP_OFFSET        3500    /**< Temperature offset in centi celsius **/
 #define MLX90393_TEMP_RESOLUTION    452     /**< Temperature sensor resolution (45.2 * 10 for avoiding float values) **/
 
 /**
  * @brief   Magnetic flux conversion constants
  */
-#define MLX90393_XY_SENS            150     /**< xy sensitivity in nT/LSB (0.15 * 1000 for avoiding float values) **/
-#define MLX90393_Z_SENS             242     /**< z sensitivity in nT/LSB (0.242 * 1000 for avoiding float values) **/
+#define MLX90393_XY_SENS            150     /**< xy sensitivity in nT/LSB **/
+#define MLX90393_Z_SENS             242     /**< z sensitivity in nT/LSB **/
+
+/**
+ * @brief   Timing constants
+ */
+#define MLX90393_T_STBY             264     /**< Time from IDLE to STBY in us **/
+#define MLX90393_T_ACTIVE           432     /**< Time from STBY to ACTIVE in us **/
+#define MLX90393_T_CONV_END         120     /**< Time to end analog active mode in us **/
 
 #ifdef __cplusplus
 //}
