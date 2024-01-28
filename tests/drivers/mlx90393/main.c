@@ -15,18 +15,53 @@
  *
  * @author      Michael Ristau <michael.ristau@fh-erfurt.de>
  *
+ * ## About
+ *
+ * The test application demonstrates the use of different functions of
+ * the MLX90393 sensor driver depending on the used modules and configuration params.
+ * 
+ * By default the test application uses the I2C bus and the default params set
+ * defined in file mlx90393_params.h. The default params use the Burst mode
+ * and interrupts to wait for the sensor data to be ready.
+ * 
+ * ## Usage
+ * To compile and execute the test application, use command in the test directory:
+ * make BOARD=... flash
+ * 
+ * To test the different driver functions you can overwrite the parameters in the
+ * default configuration set.
+ * 
+ * Some examples: 
+ * 
+ * Wake-up on change mode absolute:
+ * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ * CFLAGS="-DMLX90393_PARAM_MODE=MLX90393_MODE_WAKE_UP_ON_CHANGE_ABSOLUTE" \
+ * make BOARD=... flash
+ * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ * Single measurement mode:
+ * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ * CFLAGS="-DMLX90393_PARAM_MODE=MLX90393_MODE_SINGLE_MEASUREMENT" \
+ * make BOARD=... flash
+ * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ * Deactivate interrupt:
+ * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ * CFLAGS="-DMLX90393_PARAM_INT_PIN=GPIO_UNDEF" \
+ * make BOARD=... flash
+ * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ * 
+ * To test the sensor with the SPI Interface you can use the mlx90393_spi module:
+ * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ * DRIVER='mlx90393_spi' \
+ * make BOARD=... flash
+ * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
  * @}
  */
-
-#define MLX90393_PARAM_GAIN             (MLX90393_GAIN_2X)
 
 #include <stdio.h>
 #include <stdlib.h>
 #include "mlx90393.h"
 #include "mlx90393_params.h"
-#include "shell.h"
-
-static mlx90393_t dev;
+#include "ztimer.h"
 
 static void print_error(int error)
 {
@@ -55,16 +90,15 @@ static void print_error(int error)
     }
 }
 
-static int shell_mlx90393_init_burst_mode(int argc, char **argv)
+int main(void)
 {
-    (void)argc;
-    (void)argv;
-    
+    puts("MAG3110 magnetometer driver test application\n\r");
 #if MODULE_MLX90393_SPI
-    printf("Initializing MLX90393 magnetometer in burst mode at SPI_%i", mlx90393_params[0].spi);
+    printf("Initializing MLX90393 magnetometer at SPI_%i", mlx90393_params[0].spi);
 #elif MODULE_MLX90393_I2C
-    printf("Initializing MLX90393 magnetometer in burst mode at I2C_%i", mlx90393_params[0].i2c);
+    printf("Initializing MLX90393 magnetometer at I2C_%i", mlx90393_params[0].i2c);
 #endif
+    mlx90393_t dev;
     int error = 0;
     if ((error = mlx90393_init(&dev, &mlx90393_params[0])) != MLX90393_SUCCESS) {
         puts("[FAILED]");
@@ -72,137 +106,37 @@ static int shell_mlx90393_init_burst_mode(int argc, char **argv)
         return -1;
     }
     puts("[SUCCESS]");
-    return 0;
-}
 
-static int shell_mlx90393_init_woc_mode(int argc, char **argv)
-{
-    (void)argc;
-    (void)argv;
-
-    mlx90393_params_t params = mlx90393_params[0];
-    params.mode = MLX90393_MODE_WAKE_UP_ON_CHANGE_ABSOLUTE;
-    params.treshold.z = 1000;
-    params.treshold.xy = 0xFFFF;
-    params.treshold.temp = 0xFFFF;
-#if MODULE_MLX90393_SPI
-    printf("Initializing MLX90393 magnetometer in wake-up on change mode at SPI_%i", mlx90393_params[0].spi);
-#elif MODULE_MLX90393_I2C
-    printf("Initializing MLX90393 magnetometer in wake-up on change mode at I2C_%i", mlx90393_params[0].i2c);
-#endif
-    int error = 0;
-    if ((error = mlx90393_init(&dev, &params)) != MLX90393_SUCCESS) {
-        puts("[FAILED]");
-        print_error(error);
-        return -1;
-    }
-    puts("[SUCCESS]");
-    return 0;
-}
-
-static int shell_mlx90393_init_sm_mode(int argc, char **argv)
-{
-    (void)argc;
-    (void)argv;
-
-     mlx90393_params_t params = mlx90393_params[0];
-     params.mode = MLX90393_MODE_SINGLE_MEASUREMENT;
-#if MODULE_MLX90393_SPI
-    printf("Initializing MLX90393 magnetometer in single measurement mode at SPI_%i", mlx90393_params[0].spi);
-#elif MODULE_MLX90393_I2C
-    printf("Initializing MLX90393 magnetometer in single measurement mode at I2C_%i", mlx90393_params[0].i2c);
-#endif
-    int error = 0;
-    if ((error = mlx90393_init(&dev, &params)) != MLX90393_SUCCESS) {
-        puts("[FAILED]");
-        print_error(error);
-        return -1;
-    }
-    puts("[SUCCESS]");
-    return 0;
-}
-
-static int shell_mlx90393_read(int argc, char **argv)
-{
-    int n = 1;
-    if (argc > 1) {
-        n = atoi(argv[1]);
-    }
+    unsigned count = 0;
 
     mlx90393_data_t data;
-    int error = 0;
-    for (int i = 0; i < n; i++) {
+    puts("Starting read data from the device");
+    while (1) {
         if ((error = mlx90393_read(&dev, &data)) != MLX90393_SUCCESS) {
-            puts("Failed to read data from the device\n\r");
+            puts("Failed to read data from the device");
             print_error(error);
             return -1;
-        }   
-        printf("Field strength: X: %d uT Y: %d uT Z: %d uT\n\r", data.x_axis, data.y_axis, data.z_axis);
+        }
+        printf("Field strength: X: %ld uT Y: %ld uT Z: %ld uT\n\r", data.x_axis, data.y_axis, data.z_axis);
         printf("Temperature: %d d°C\n\r", data.temp);
+        
+        if (dev.params.mode == MLX90393_MODE_SINGLE_MEASUREMENT) {
+            ztimer_sleep(ZTIMER_SEC, 1);
+        }
+
+        /*
+         * the continuous measurement is stopped, the sensor is set to idle mode
+         * and started again after 5 seconds every 50 cycles
+         */
+        count++;
+        if (dev.params.mode != MLX90393_MODE_SINGLE_MEASUREMENT && count == 50) {
+            mlx90393_stop_cont(&dev);
+            puts("Measurement stopped and sensor set to idle mode.");
+            ztimer_sleep(ZTIMER_SEC, 5);
+            mlx90393_start_cont(&dev);
+            puts("Measurement started again.");
+            count = 0;
+        }
     }
-    return 0;
-}
-
-static int shell_mlx90393_stop_cont(int argc, char **argv) {
-    (void)argc;
-    (void)argv;
-
-    int error = 0;
-    if ((error = mlx90393_stop_cont(&dev)) != MLX90393_SUCCESS) {
-        puts("Failed to stop continuous measurement mode\n\r");
-        print_error(error);
-        return -1;
-    }
-    puts("Stopped continuous measurement mode\n\r");
-    return 0;
-}
-
-static int shell_mlx90393_start_cont(int argc, char **argv) {
-    (void)argc;
-    (void)argv;
-
-    int error = 0;
-    if ((error = mlx90393_start_cont(&dev)) != MLX90393_SUCCESS) {
-        puts("Failed to start continuous measurement mode\n\r");
-        print_error(error);
-        return -1;
-    }
-    puts("Started continuous measurement mode\n\r");
-    return 0;
-}
-
-static int shell_mlx90393_reset(int argc, char **argv)
-{
-    (void)argc;
-    (void)argv;
-
-    int error = 0;
-    if ((error = mlx90393_reset(&dev)) != MLX90393_SUCCESS) {
-        puts("Failed to reset device\n\r");
-        print_error(error);
-        return -1;
-    }
-    puts("reset device\n\r");
-    return 0;
-}
-
-static const shell_command_t shell_commands[] = {
-    { "init_bm", "init the device in burst mode", shell_mlx90393_init_burst_mode },
-    { "init_woc", "init the device in woc mode", shell_mlx90393_init_woc_mode },
-    { "init_sm", "init the device in sm mode", shell_mlx90393_init_sm_mode },
-    { "read", "read a single or several measurements", shell_mlx90393_read },
-    { "stop_cont", "stop continuous measurement mode",  shell_mlx90393_stop_cont},
-    { "start_cont", "start continuous measurement mode",  shell_mlx90393_start_cont},
-    { "reset", "reset the device", shell_mlx90393_reset },
-    { NULL, NULL, NULL }
-};
-
-int main(void)
-{
-    puts("MAG3110 magnetometer driver test application\n\r");
-
-    char line_buf[SHELL_DEFAULT_BUFSIZE];
-    shell_run(shell_commands, line_buf, SHELL_DEFAULT_BUFSIZE);
-
     return 0;
 }

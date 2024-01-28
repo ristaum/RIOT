@@ -67,9 +67,9 @@ extern "C" {
 #ifndef MLX90393_PARAM_THRESHOLD
 #define MLX90393_PARAM_THRESHOLD                    \
 {                                                   \
-    .xy             = 0,                            \
-    .z              = 0,                            \
-    .temp           = 0                             \
+    .xy             = 0xFFFF,                       \
+    .z              = 1000,                         \
+    .temp           = 0xFFFF                        \
 }
 #endif
 
@@ -81,7 +81,7 @@ extern "C" {
 #endif
 /* Default SPI chip select pin */
 #ifndef MLX90393_PARAM_SPI_CS_PIN
-#define MLX90393_PARAM_SPI_CS_PIN       (GPIO_PIN(PORT_C, 6))
+#define MLX90393_PARAM_SPI_CS_PIN       (GPIO_PIN(PORT_B, 6))
 #endif
 /* Default SPI clock speed */
 #ifndef MLX90393_PARAM_SPI_CLK
@@ -93,7 +93,7 @@ extern "C" {
 {                                                   \
     .spi            = MLX90393_PARAM_SPI,           \
     .cs_pin         = MLX90393_PARAM_SPI_CS_PIN,    \
-    .clk            = MLX90393_PARAM_SPI_CLK;       \
+    .clk            = MLX90393_PARAM_SPI_CLK,       \
     .mode           = MLX90393_PARAM_MODE,          \
     .int_pin        = MLX90393_PARAM_INT_PIN,       \
     .gain           = MLX90393_PARAM_GAIN,          \

@@ -1,7 +1,8 @@
 include ../Makefile.drivers_common
 
+DRIVER ?= mlx90393_i2c
 USEMODULE += mlx90393
-USEMODULE += mlx90393_i2c
-USEMODULE += shell_cmds_default
+USEMODULE += $(DRIVER)
+USEMODULE += ztimer_sec
 
 include $(RIOTBASE)/Makefile.include
