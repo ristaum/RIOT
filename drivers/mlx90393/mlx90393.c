@@ -24,7 +24,7 @@
 #include "ztimer.h"
 #include "imath.h"
 
-#define ENABLE_DEBUG    1
+#define ENABLE_DEBUG    0
 #include "debug.h"
 
 #if MODULE_MLX90393_SPI
@@ -47,6 +47,9 @@
 #define DEV_REF_TEMP        (dev->ref_temp)
 #define CONN_TEST_DATA      (0xAF03)
 
+#define MLX90393_BM_READ_TIMEOUT    (10)
+
+
 /** Forward declaration of functions for internal use */
 static int _init_bus(const mlx90393_t *dev);
 static void _acquire(mlx90393_t *dev);
@@ -65,6 +68,7 @@ static int _reset(mlx90393_t *dev);
 static int _exit(mlx90393_t *dev);
 static int _is_avaiable(mlx90393_t *dev);
 static void _calculate_conv_time(mlx90393_t *dev);
+static int _read_measurement(mlx90393_t *dev, uint8_t *buffer);
 
 int mlx90393_init(mlx90393_t *dev, const mlx90393_params_t *params)
 {
@@ -82,11 +86,13 @@ int mlx90393_init(mlx90393_t *dev, const mlx90393_params_t *params)
         _release(dev);
         return error;
     }
+    ztimer_sleep(ZTIMER_MSEC, MLX90393_COMMAND_EX_TIMEOUT);
     /* reset mlx90393 */
     if ((error = _reset(dev)) != MLX90393_SUCCESS) {
         _release(dev);
         return error;
     }
+    ztimer_sleep(ZTIMER_MSEC, MLX90393_COMMAND_RT_TIMEOUT);
     /* check availability of the sensor */
     if ((error = _is_avaiable(dev)) != MLX90393_SUCCESS) {
         _release(dev);
@@ -204,7 +210,7 @@ int mlx90393_init(mlx90393_t *dev, const mlx90393_params_t *params)
             return error;
         }
     }
-    if (!gpio_is_valid(DEV_INT_PIN)) {
+    if (DEV_MODE == MLX90393_MODE_SINGLE_MEASUREMENT && !gpio_is_valid(DEV_INT_PIN)) {
         _calculate_conv_time(dev);
     }
 
@@ -217,36 +223,13 @@ static void _isr(void *lock)
     mutex_unlock(lock);
 }
 
-static int _read_measurement(mlx90393_t *dev, uint8_t *buffer)
-{
-    int error = 0;
-    _acquire(dev);
-    /* read measurement */
-    if ((error = _write_byte(dev, MLX90393_COMMAND_RM)) != MLX90393_SUCCESS) {
-        _release(dev);
-        return error;
-    }
-    /* check status byte */
-    if ((error = _read_bytes(dev, buffer, 9)) != MLX90393_SUCCESS) {
-        _release(dev);
-        return error;
-    }
-    if (buffer[0] & MLX90393_STATUS_ERROR) {
-        DEBUG("Data could not be read out\n\r");
-        _release(dev);
-        return MLX90393_ERROR;
-    }
-    _release(dev);
-    return MLX90393_SUCCESS;
-}
-
 int mlx90393_read(mlx90393_t *dev, mlx90393_data_t *data) 
 {
     assert(dev);
     assert(data);
     int error = 0;
 
-    /* start single measurement */
+    /* start single measurement if used */
     if (DEV_MODE == MLX90393_MODE_SINGLE_MEASUREMENT) {
         _acquire(dev);
         if ((error = _write_byte(dev, MLX90393_COMMAND_SM)) != MLX90393_SUCCESS) {
@@ -270,22 +253,30 @@ int mlx90393_read(mlx90393_t *dev, mlx90393_data_t *data)
             return error;
         }
     }
-    /* polling */
     else {
-        ztimer_sleep(ZTIMER_MSEC, dev->conversion_time);
-        while (_read_measurement(dev, buffer) != MLX90393_SUCCESS) {
-            ztimer_sleep(ZTIMER_MSEC, 1);
+        /* sleep for conversion time in single measurement mode */
+        if (DEV_MODE == MLX90393_MODE_SINGLE_MEASUREMENT) {
+            ztimer_sleep(ZTIMER_MSEC, dev->conversion_time);
+            if ((error = _read_measurement(dev, buffer)) != MLX90393_SUCCESS) {
+                return error;
+            }
+        }
+        /* polling in burst mode */
+        else if(DEV_MODE ==MLX90393_MODE_BURST) {
+            while (_read_measurement(dev, buffer) != MLX90393_SUCCESS) {
+                ztimer_sleep(ZTIMER_MSEC, MLX90393_BM_READ_TIMEOUT);
+            }
         }
     }
 
-    /* convert read data */
+    /* convert read data according to Table 17 and 21 from Datasheet */
     int16_t raw_x, raw_y, raw_z;
     uint16_t raw_temp;
     raw_temp = (uint16_t)((buffer[1] << 8) | buffer[2]);
     raw_x = (int16_t)((buffer[3] << 8) | buffer[4]);
     raw_y = (int16_t)((buffer[5] << 8) | buffer[6]);
     raw_z = (int16_t)((buffer[7] << 8) | buffer[8]);
-
+    
     if (DEV_RESOLUTION == MLX90393_RES_18) {
         raw_x -= 0x8000;
         raw_y -= 0x8000;
@@ -302,25 +293,6 @@ int mlx90393_read(mlx90393_t *dev, mlx90393_data_t *data)
     data->x_axis = ((raw_x * gain) / 100) * MLX90393_XY_SENS * (1 << DEV_RESOLUTION) / 1000;
     data->y_axis = ((raw_y * gain) / 100) * MLX90393_XY_SENS * (1 << DEV_RESOLUTION) / 1000;
     data->z_axis = ((raw_z * gain) / 100) * MLX90393_Z_SENS * (1 << DEV_RESOLUTION) / 1000;
-
-    return MLX90393_SUCCESS;
-}
-
-int mlx90393_reset(mlx90393_t *dev)
-{
-    assert(dev);
-    int error = 0;
-    _acquire(dev);
-
-    if ((error = _exit(dev)) != MLX90393_SUCCESS) {
-        _release(dev);
-        return error;
-    }
-    if ((error = _reset(dev)) != MLX90393_SUCCESS) {
-        _release(dev);
-        return error;
-    }
-    _release(dev);
 
     return MLX90393_SUCCESS;
 }
@@ -343,6 +315,11 @@ int mlx90393_stop_cont(mlx90393_t *dev)
 int mlx90393_start_cont(mlx90393_t *dev)
 {
     assert(dev);
+
+    if (DEV_MODE == MLX90393_MODE_SINGLE_MEASUREMENT) {
+        return MLX90393_ERROR;
+    }
+
     int error = 0;
     _acquire(dev);
 
@@ -517,6 +494,7 @@ static int _write_register_bits(mlx90393_t *dev, uint8_t addr, uint16_t mask, ui
 
 static int _calculate_temp(uint16_t raw_temp, uint16_t ref_temp)
 {
+    /* calculate temp in deci celsius (Application note MLX90393 temperature compensation - v4) */
     return (MLX90393_TEMP_OFFSET + (((raw_temp - ref_temp) * 1000) / MLX90393_TEMP_RESOLUTION));
 }
 
@@ -554,7 +532,6 @@ static int _reset(mlx90393_t *dev)
     if ((error = _check_status_byte(dev)) != MLX90393_SUCCESS) {
         return error;
     }
-    ztimer_sleep(ZTIMER_MSEC, MLX90393_COMMAND_RT_TIMEOUT);
     return MLX90393_SUCCESS;
 }
 
@@ -567,7 +544,6 @@ static int _exit(mlx90393_t *dev)
     if ((error = _check_status_byte(dev)) != MLX90393_SUCCESS) {
         return error;
     }
-    ztimer_sleep(ZTIMER_MSEC, MLX90393_COMMAND_EX_TIMEOUT);
     return MLX90393_SUCCESS;
 }
 
@@ -584,25 +560,34 @@ static int _is_avaiable(mlx90393_t *dev)
     return buffer == CONN_TEST_DATA ? MLX90393_SUCCESS : MLX90393_ERROR_NOT_AVAILABLE;
 }
 
-/**
- * @brief   calculate conversion time in ms (Datasheet table 8: Timing specifications)
- */
 static void _calculate_conv_time(mlx90393_t *dev)
 {
+    /* calculate single measurement conversion time in ms (Datasheet table 8: Timing specifications) */
     int conv_mag = 67 + 64 * powi(2, DEV_OSR_MAG) * (2 + powi(2, DEV_DIG_FILT));
     int conv_temp = 67 + 192 * powi(2, DEV_OSR_TEMP);
-    if (DEV_MODE == MLX90393_MODE_SINGLE_MEASUREMENT) {
-        dev->conversion_time = (MLX90393_T_STBY + MLX90393_T_ACTIVE + 3 * conv_mag + conv_temp + MLX90393_T_CONV_END) / 1000 + 1;
+    dev->conversion_time = (MLX90393_T_STBY + MLX90393_T_ACTIVE + 3 * conv_mag + conv_temp + MLX90393_T_CONV_END) / 1000 + 1;
+}
+
+static int _read_measurement(mlx90393_t *dev, uint8_t *buffer)
+{
+    int error = 0;
+    _acquire(dev);
+    /* read measurement */
+    if ((error = _write_byte(dev, MLX90393_COMMAND_RM)) != MLX90393_SUCCESS) {
+        _release(dev);
+        return error;
     }
-    else if(DEV_MODE == MLX90393_MODE_BURST) {
-        int t_conv = (3 * conv_mag + conv_temp + MLX90393_T_CONV_END) / 1000 + 1;
-        int t_interval = 20 * dev->params.odr;
-        if (t_conv > t_interval) {
-            dev->conversion_time = t_conv;
-        }
-        else {
-            dev->conversion_time = t_interval;
-        }
+    /* check status byte */
+    if ((error = _read_bytes(dev, buffer, 9)) != MLX90393_SUCCESS) {
+        _release(dev);
+        return error;
     }
+    if (buffer[0] & MLX90393_STATUS_ERROR) {
+        DEBUG("Data could not be read out\n\r");
+        _release(dev);
+        return MLX90393_ERROR;
+    }
+    _release(dev);
+    return MLX90393_SUCCESS;
 }
 
