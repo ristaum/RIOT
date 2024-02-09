@@ -135,7 +135,7 @@ extern "C" {
                                 .odr            = MLX90393_PARAM_ODR,           \
                                 .oversampling   = MLX90393_PARAM_OSR,           \
                                 .dig_filt       = MLX90393_PARAM_DIG_FILT,      \
-                                .treshold       = MLX90393_PARAM_THRESHOLD      \
+                                .threshold      = MLX90393_PARAM_THRESHOLD      \
                             }
 #endif
 
@@ -170,7 +170,7 @@ extern "C" {
                                 .odr            = MLX90393_PARAM_ODR,           \
                                 .oversampling   = MLX90393_PARAM_OSR,           \
                                 .dig_filt       = MLX90393_PARAM_DIG_FILT,      \
-                                .treshold       = MLX90393_PARAM_THRESHOLD      \
+                                .threshold      = MLX90393_PARAM_THRESHOLD      \
                             }
 #endif
 #endif

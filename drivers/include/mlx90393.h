@@ -18,7 +18,7 @@
  *
  * The MLX90393 is a magnetic field sensor offering a 16-bit output proportional
  * to the magnetic flux density sensed along the X, Y, and Z axes.
- * In addition the sensor offers a 16-bit temperature output signal. These values
+ * In addition, the sensor offers a 16-bit temperature output signal. These values
  * are available via I2C and SPI. The sensor can be run in single shot and continuous
  * modes, see below.
  * To minimize host operations, interrupts can be used either when new sensor data is
@@ -28,7 +28,7 @@
  *
  * Functionality the driver supports:
  * - Magnetic field and temperature sensing in single-shot or continuous mode
- * - Configurable tresholds for triggering interrupt
+ * - Configurable thresholds for triggering interrupt
  * - Configurable output data rate
  * - Configurable analog chain gain
  * - Configurable 16-bit output value from the 19-bit ADC
@@ -47,7 +47,7 @@
  * :-------------------|:-------------------------------------------------------
  * `mlx90393_i2c`      | I2C
  * `mlx90393_spi`      | SPI
- * <center>
+ * </center>
  * <br>
  *
  * # Using the driver
@@ -74,7 +74,7 @@
  *   interrupt if the difference between both exceeds a user-defined threshold.
  *   The reference value is defined as one of the following:
  *   -  The first measurement of WOC mode is stored once as reference value. This measurement at
- *      “t=0” is then the basis for comparison (Absolut mode).
+ *      “t=0” is then the basis for comparison (Absolute mode).
  *   -  The reference for acquisition(t) is always acquisition(t-1) (Relative mode).
  *   For this mode the use of interrupt is mandatory.
  *
@@ -140,8 +140,8 @@
  *
  * The MLX90393 sensor can be shutdown into idle mode when no continuous measurements are
  * required using the function #mlx90393_stop_cont. The power consumption is then reduced to
- * max. 5 uA. To restart the MLX90393 in previous continuous measurement mode, the
- * #mlx90393_start_cont function can be used.
+ * max. 5 uA. To restart the MLX90393 in previous continuous measurement mode,
+ * the #mlx90393_start_cont function can be used.
  * In single measurement mode, once the measurement is completed, the sensor transitions into
  * idle mode, awaiting a new command from the master to initiate another acquisition.
  *
@@ -267,13 +267,13 @@ typedef struct {
 } mlx90393_oversampling_t;
 
 /**
- * @brief   Tresholds for wake-up on change mode
+ * @brief   Thresholds for wake-up on change mode
  */
 typedef struct {
-    int xy;                             /**< Treshold for x and y axes */
-    int z;                              /**< Tresold for z axis */
-    int temp;                           /**< Tresold for temperature */
-} mlx90393_treshold_t;
+    int xy;                             /**< Threshold for x and y axes */
+    int z;                              /**< Threshold for z axis */
+    int temp;                           /**< Threshold for temperature */
+} mlx90393_threshold_t;
 
 /**
  * @brief   Device configuration parameters
@@ -294,7 +294,7 @@ typedef struct {
     mlx90393_odr_t odr;                     /**< Output data rate */
     mlx90393_oversampling_t oversampling;   /**< Oversampling ratio */
     mlx90393_digital_filter_t dig_filt;     /**< Digital filter applicable to ADC */
-    mlx90393_treshold_t treshold;           /**< Treshold for wake-up on change mode */
+    mlx90393_threshold_t threshold;         /**< Threshold for wake-up on change mode */
 } mlx90393_params_t;
 
 /**

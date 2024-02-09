@@ -80,7 +80,6 @@ extern "C" {
 
 /**
  * @brief   Status byte bit map
- * 
  */
 #define MLX90393_STATUS_RESET       0x04    /**< reset bit */
 #define MLX90393_STATUS_ERROR       0x10    /**< error bit */

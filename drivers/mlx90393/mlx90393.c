@@ -51,7 +51,6 @@
 
 #define MLX90393_BM_READ_TIMEOUT    (10)
 
-
 /** Forward declaration of functions for internal use */
 static int _init_bus(const mlx90393_t *dev);
 static void _acquire(mlx90393_t *dev);
@@ -102,7 +101,7 @@ int mlx90393_init(mlx90393_t *dev, const mlx90393_params_t *params)
     /* check availability of the sensor */
     if ((error = _is_avaiable(dev)) != 0) {
         _release(dev);
-        DEBUG("[mlx90393] error: device not avaiable\n");
+        DEBUG("[mlx90393] error: device not available\n");
         return error;
     }
     /* store ref temp in dev */
@@ -197,13 +196,13 @@ int mlx90393_init(mlx90393_t *dev, const mlx90393_params_t *params)
             _release(dev);
             return error;
         }
-        /* set tresholds */
+        /* set thresholds */
         int gain = _get_gain_factor(DEV_GAIN);
-        uint16_t raw_xy_threshold = (1000 * dev->params->treshold.xy / (MLX90393_XY_SENS
+        uint16_t raw_xy_threshold = (1000 * dev->params->threshold.xy / (MLX90393_XY_SENS
             * (1 << DEV_RESOLUTION) * gain)) * 100;
-        uint16_t raw_z_threshold = (1000 * dev->params->treshold.z / (MLX90393_Z_SENS
+        uint16_t raw_z_threshold = (1000 * dev->params->threshold.z / (MLX90393_Z_SENS
             * (1 << DEV_RESOLUTION) * gain)) * 100;
-        uint16_t raw_temp_threshold = dev->params->treshold.temp * MLX90393_TEMP_RESOLUTION
+        uint16_t raw_temp_threshold = dev->params->threshold.temp * MLX90393_TEMP_RESOLUTION
             / 1000;
 
         if ((error = _write_register(dev, MLX90393_REG_WOXY_THRESHOLD, raw_xy_threshold))) {
@@ -223,7 +222,7 @@ int mlx90393_init(mlx90393_t *dev, const mlx90393_params_t *params)
             _release(dev);
             return error;
         }
-        if((error = _check_status_byte(dev)) != 0) {
+        if ((error = _check_status_byte(dev)) != 0) {
             _release(dev);
             return error;
         }
@@ -281,7 +280,7 @@ int mlx90393_read(mlx90393_t *dev, mlx90393_data_t *data)
             }
         }
         /* polling in burst mode */
-        else if(DEV_MODE ==MLX90393_MODE_BURST) {
+        else if (DEV_MODE ==MLX90393_MODE_BURST) {
             while (_read_measurement(dev, buffer) != 0) {
                 ztimer_sleep(ZTIMER_MSEC, MLX90393_BM_READ_TIMEOUT);
             }
@@ -624,4 +623,3 @@ static int _read_measurement(mlx90393_t *dev, uint8_t *buffer)
     _release(dev);
     return 0;
 }
-
