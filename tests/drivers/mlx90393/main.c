@@ -19,23 +19,23 @@
  *
  * The test application demonstrates the use of different functions of
  * the MLX90393 sensor driver depending on the used modules and configuration params.
- * 
+ *
  * By default the test application uses the I2C bus and the default params set
  * defined in file mlx90393_params.h. The default params use the Burst mode
  * and interrupts to wait for the sensor data to be ready.
- * 
+ *
  * ## Usage
  * To compile and execute the test application, use command in the test directory:
  * make BOARD=... flash
- * 
+ *
  * To test the different driver functions you can overwrite the parameters in the
  * default configuration set.
- * 
- * Some examples: 
- * 
+ *
+ * Some examples:
+ *
  * Wake-up on change mode absolute:
  * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
- * CFLAGS="-DMLX90393_PARAM_MODE=MLX90393_MODE_WAKE_UP_ON_CHANGE_ABSOLUTE" \
+ * CFLAGS="-DMLX90393_PARAM_MODE=MLX90393_MODE_WOC_ABSOLUTE" \
  * make BOARD=... flash
  * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
  * Single measurement mode:
@@ -48,7 +48,7 @@
  * CFLAGS="-DMLX90393_PARAM_INT_PIN=GPIO_UNDEF" \
  * make BOARD=... flash
  * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
- * 
+ *
  * To test the sensor with the SPI Interface you can use the mlx90393_spi module:
  * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
  * DRIVER='mlx90393_spi' \
@@ -59,30 +59,33 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <errno.h>
 #include "mlx90393.h"
 #include "mlx90393_params.h"
 #include "ztimer.h"
+
+#define BUS_ERROR                   -EIO
+#define DEVICE_NOT_AVAILABLE        -ENXIO
+#define INVALID_PARAM               -EINVAL
+#define DEVICE_ERROR                -EFAULT
 
 static void print_error(int error)
 {
     switch (error)
     {
-    case MLX90393_SUCCESS:
+    case 0:
         puts("No error");
         break;
-    case MLX90393_ERROR_I2C:
-        puts("I2C error");
+    case BUS_ERROR:
+        puts("Communication bus error");
         break;
-    case MLX90393_ERROR_SPI:
-        puts("SPI error");
-        break;
-    case MLX90393_ERROR_NOT_AVAILABLE:
+    case DEVICE_NOT_AVAILABLE:
         puts("Connectivity error, device not available");
         break;
-    case MLX90393_ERROR_NO_PIN:
-        puts("No Interrupt pin configured");
+    case INVALID_PARAM:
+        puts("Invalid configuration parameter");
         break;
-    case MLX90393_ERROR:
+    case DEVICE_ERROR:
         puts("Device error");
         break;
     default:
@@ -100,7 +103,7 @@ int main(void)
 #endif
     mlx90393_t dev;
     int error = 0;
-    if ((error = mlx90393_init(&dev, &mlx90393_params[0])) != MLX90393_SUCCESS) {
+    if ((error = mlx90393_init(&dev, &mlx90393_params[0])) != 0) {
         puts("[FAILED]");
         print_error(error);
         return -1;
@@ -112,15 +115,16 @@ int main(void)
     mlx90393_data_t data;
     puts("Starting read data from the device");
     while (1) {
-        if ((error = mlx90393_read(&dev, &data)) != MLX90393_SUCCESS) {
+        if ((error = mlx90393_read(&dev, &data)) != 0) {
             puts("Failed to read data from the device");
             print_error(error);
             return -1;
         }
-        printf("Field strength: X: %ld uT Y: %ld uT Z: %ld uT\n\r", data.x_axis, data.y_axis, data.z_axis);
+        printf("Field strength: X: %ld uT Y: %ld uT Z: %ld uT\n\r",
+            data.x_axis, data.y_axis, data.z_axis);
         printf("Temperature: %d d°C\n\r", data.temp);
-        
-        if (dev.params.mode == MLX90393_MODE_SINGLE_MEASUREMENT) {
+
+        if (dev.params->mode == MLX90393_MODE_SINGLE_MEASUREMENT) {
             ztimer_sleep(ZTIMER_SEC, 1);
         }
 
@@ -129,7 +133,7 @@ int main(void)
          * and started again after 5 seconds every 50 cycles
          */
         count++;
-        if (dev.params.mode != MLX90393_MODE_SINGLE_MEASUREMENT && count == 50) {
+        if (dev.params->mode != MLX90393_MODE_SINGLE_MEASUREMENT && count == 50) {
             mlx90393_stop_cont(&dev);
             puts("Measurement stopped and sensor set to idle mode.");
             ztimer_sleep(ZTIMER_SEC, 5);

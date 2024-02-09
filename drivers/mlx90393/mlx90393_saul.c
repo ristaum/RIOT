@@ -23,10 +23,10 @@
 
 static int read(const void *dev, phydat_t *res)
 {
-    /* Maximum value that can be achieved is +- 106480 uT according to Table 17 
+    /* Maximum value that can be achieved is +- 106480 uT according to Table 17
     and 21 from Datasheet. To fit in signed 16 bit only the 16 MSB are passed. */
     mlx90393_data_t data;
-    if (mlx90393_read((mlx90393_t*) dev, &data) == MLX90393_SUCCESS) {
+    if (mlx90393_read((mlx90393_t*) dev, &data) == 0) {
         res->val[0] = (int16_t) data.x_axis >> 2;
         res->val[1] = (int16_t) data.y_axis >> 2;
         res->val[2] = (int16_t) data.z_axis >> 2;
