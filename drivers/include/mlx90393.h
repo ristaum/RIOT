@@ -7,7 +7,7 @@
  */
 
 /**
- * @defgroup    drivers_mlx90393 MLX90393
+ * @defgroup    drivers_mlx90393 MLX90393 3-axis magnetometer
  * @ingroup     drivers_sensors
  * @ingroup     drivers_saul
  * @brief       Device driver for the MLX90393 3-axis magnetometer
@@ -41,14 +41,27 @@
  *   type #mlx90393_params_t as defined in the file `mlx90393_params.h
  * - SAUL sensor interface
  *
- * The following pseudomodules are used to choose the communication bus:
+ * The following pseudomodules are used to choose the communication bus or add
+ * additional functionalities:
  * <center>
- * Pseudomodule        | Bus
+ * Pseudomodule        | Functionality
  * :-------------------|:-------------------------------------------------------
- * `mlx90393_i2c`      | I2C
- * `mlx90393_spi`      | SPI
+ * `mlx90393_i2c`      | Use I2C bus
+ * `mlx90393_spi`      | Use SPI bus
+ * `mlx90393_int`      | Data ready interrupt handling
+ * `mlx90393_woc`      | Wake-up on change mode
  * </center>
  * <br>
+ *
+ * @note
+ * - If the handling of data ready interrupts is enabled by module `mlx90393_int`,
+ *   the GPIO pin for the interrupt signal must be defined by the configuration parameter
+ *   mlx90393_params_t::int_pin. The default configuration of this GPIO pin
+ *   is defined by #MLX90393_PARAM_INT_PIN that can be overridden by the
+ *   board definition. The interrupt signal is HIGH active. With the use of the module
+ *   `mlx90393_int` polling is no longer supported.
+ * - For the Wake-up on change measurement mode the use of interrupt is mandatory.
+ *   If the module `mlx90393_woc` is used, the module `mlx90393_int` is added automatically.
  *
  * # Using the driver
  *
@@ -129,18 +142,25 @@
  * ## Using Interrupts
  *
  * The MLX90393 sensor supports the use of data-ready interrupts to signal when data is available.
- * To use interrupts, connect the INT pin of the MLX90393 to the designated interrupt pin on the
- * MCU, as configured in the parameters.
- * When calling the function #mlx90393_read, it will block the calling thread until an interrupt
- * is triggered. Once an interrupt is triggered, the driver handles the interrupt with an internal
- * ISR and then proceeds with reading and converting data and finally returns from the
- * #mlx90393_read function.
+ * To use interrupts, add the module `mlx90393_int`, connect the INT pin of the MLX90393 to the
+ * designated interrupt pin on the MCU, as configured in the parameters.
+ * In single measurement and burst mode, when calling the function #mlx90393_read,
+ * it will block the calling thread until an interrupt is triggered. Once an interrupt is
+ * triggered, the driver handles the interrupt with an internal ISR and then proceeds with
+ * reading and converting data and finally returns from the #mlx90393_read function.
+ * In wake-up on change mode the #mlx90393_enable_woc function can be used to activate the
+ * interrupt which is triggered, when the user defined threshold is crossed.
+ * Additionally a callback function for handling the interrupt and its argument are
+ * passed to the function.
+ * @warning
+ * The passed callback function is called in interrupt context and should not be used to access
+ * the sensor or execute time-consuming code.
  *
  * ## Power Saving
  *
  * The MLX90393 sensor can be shutdown into idle mode when no continuous measurements are
  * required using the function #mlx90393_stop_cont. The power consumption is then reduced to
- * max. 5 uA. To restart the MLX90393 in previous continuous measurement mode,
+ * a maximum of 5 uA. To restart the MLX90393 in previous continuous measurement mode,
  * the #mlx90393_start_cont function can be used.
  * In single measurement mode, once the measurement is completed, the sensor transitions into
  * idle mode, awaiting a new command from the master to initiate another acquisition.
@@ -156,9 +176,9 @@
 #define MLX90393_H
 
 #include "periph/gpio.h"
-#if MODULE_MLX90393_SPI
+#if IS_USED(MODULE_MLX90393_SPI)
 #include "periph/spi.h"
-#elif MODULE_MLX90393_I2C
+#elif IS_USED(MODULE_MLX90393_I2C)
 #include "periph/i2c.h"
 #endif
 
@@ -184,10 +204,12 @@ typedef struct {
 typedef enum {
     MLX90393_MODE_BURST,                        /**< Burst mode */
     MLX90393_MODE_SINGLE_MEASUREMENT,           /**< Single measurement mode */
+#if IS_USED(MODULE_MLX90393_WOC) || DOXYGEN
     MLX90393_MODE_WOC_ABSOLUTE,                 /**< Wake-up on change mode,
                                                      compared to first measurement */
     MLX90393_MODE_WOC_RELATIVE,                 /**< Wake-up on change mode,
                                                      compared to previous measurement */
+#endif
 } mlx90393_mode_t;
 
 /**
@@ -266,6 +288,7 @@ typedef struct {
     mlx90393_oversampling_ratio_t temp;     /**< Oversampling ratio temperature sensor */
 } mlx90393_oversampling_t;
 
+#if IS_USED(MODULE_MLX90393_WOC) || DOXYGEN
 /**
  * @brief   Thresholds for wake-up on change mode
  */
@@ -276,25 +299,38 @@ typedef struct {
 } mlx90393_threshold_t;
 
 /**
+ * @brief   Signature of callback function triggered from wake-up on change interrupt
+ *
+ * @param[in] arg       argument for the callback
+ */
+typedef void (*mlx90393_cb_t)(void *arg);
+
+#endif
+
+/**
  * @brief   Device configuration parameters
  */
 typedef struct {
-#if MODULE_MLX90393_SPI || DOXYGEN
-    spi_t spi;                          /**< SPI bus */
-    gpio_t cs_pin;                      /**< Connected chip select pin */
-    spi_clk_t clk;                      /**< clock speed for the SPI bus */
-#elif MODULE_MLX90393_I2C || DOXYGEN
-    i2c_t i2c;                          /**< I2C device */
-    uint8_t addr;                       /**< Magnometer I2C address */
+#if IS_USED(MODULE_MLX90393_SPI) || DOXYGEN
+    spi_t spi;                              /**< SPI bus */
+    gpio_t cs_pin;                          /**< Connected chip select pin */
+    spi_clk_t clk;                          /**< clock speed for the SPI bus */
+#elif IS_USED(MODULE_MLX90393_I2C) || DOXYGEN
+    i2c_t i2c;                              /**< I2C device */
+    uint8_t addr;                           /**< Magnometer I2C address */
 #endif
     mlx90393_mode_t mode;                   /**< Measurement mode */
+#if IS_USED(MODULE_MLX90393_INT) || DOXYGEN
     gpio_t int_pin;                         /**< Interrupt pin */
+#endif
     mlx90393_gain_t gain;                   /**< Analog chain gain */
     mlx90393_resolution_t resolution;       /**< Desired 16-bit output value from the 19-bit ADC */
     mlx90393_odr_t odr;                     /**< Output data rate */
     mlx90393_oversampling_t oversampling;   /**< Oversampling ratio */
     mlx90393_digital_filter_t dig_filt;     /**< Digital filter applicable to ADC */
+#if IS_USED(MODULE_MLX90393_WOC) || DOXYGEN
     mlx90393_threshold_t threshold;         /**< Threshold for wake-up on change mode */
+#endif
 } mlx90393_params_t;
 
 /**
@@ -304,7 +340,9 @@ typedef struct {
     const mlx90393_params_t *params;    /**< Device configuration parameters */
     uint16_t ref_temp;                  /**< Reference temperature for converting raw temp data
                                              in centi celsius */
+#if !IS_USED(MODULE_MLX90393_INT) || DOXYGEN
     uint8_t conversion_time;            /**< Conversion time for single measurement mode */
+#endif
 } mlx90393_t;
 
 /**
@@ -317,9 +355,9 @@ typedef struct {
  * If wake-up on change mode is used, configuring a valid interrupt pin is mandatory.
  *
  * @note Some configurations of oversampling and digital filter are not permitted:
- *       - OSR_0 and DIG_FILT_0
- *       - OSR_0 and DIG_FILT_1
- *       - OSR_1 and DIG_FILT_0
+ *       - #MLX90393_OSR_0 and #MLX90393_DIG_FILT_0
+ *       - #MLX90393_OSR_0 and #MLX90393_DIG_FILT_1
+ *       - #MLX90393_OSR_1 and #MLX90393_DIG_FILT_0
  *       In such cases, the function will return with -EINVAL.
  *
  * @note The conversion time increases with higher oversampling rates and digital filters.
@@ -370,7 +408,7 @@ int mlx90393_read(mlx90393_t *dev, mlx90393_data_t *data);
  * Burst and Wake-up on change measurement modes are stopped and the device
  * is forced into idle mode. Once stopped, the modes can be restarted with mlx90393_start_cont.
  *
- * @param[in]   dev         Device descriptor of MLX90393 device to read from
+ * @param[in]   dev         Device descriptor of MLX90393 device
  *
  * @retval 0                on success
  * @retval -EIO             SPI or I2C communication error
@@ -389,13 +427,33 @@ int mlx90393_stop_cont(mlx90393_t *dev);
  * - Device must be initialized with mlx90393_init
  * - Continuous measurement was stopped with mlx90393_stop_cont
  *
- * @param[in]   dev         Device descriptor of MLX90393 device to read from
+ * @param[in]   dev         Device descriptor of MLX90393 device
  *
  * @retval 0                on success
  * @retval -EIO             SPI or I2C communication error
  * @retval -EFAULT          device error
  */
 int mlx90393_start_cont(mlx90393_t *dev);
+
+#if IS_USED(MODULE_MLX90393_WOC) || DOXYGEN
+/**
+ * @brief   Activate wake-up on change interrupt
+ *
+ * Activates the interrupt which is triggered if the user defined woc threshold is crossed.
+ * The passed callback function is called when the interrupt occurs. After the interrupt
+ * the measurement data can be read with mlx90393_read.
+ *
+ * @warning
+ * The passed callback function is called in interrupt context and should not be used to access
+ * the sensor or execute time-consuming code.
+ *
+ * @param[in]   dev         Device descriptor of MLX90393 device
+ * @param       cb          Callback to be executed when interrupt occurs
+ * @param       arg         Callback argument
+ */
+void mlx90393_enable_woc(mlx90393_t *dev, mlx90393_cb_t cb, void *arg);
+
+#endif
 
 #ifdef __cplusplus
 }

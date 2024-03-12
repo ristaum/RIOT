@@ -95,7 +95,7 @@ extern "C" {
  */
 #define MLX90393_TEMP_OFFSET        3500    /**< Temperature offset in centi celsius */
 #define MLX90393_TEMP_RESOLUTION    452     /**< Temperature sensor resolution
-                                            * (45.2 * 10 for avoiding float values) */
+                                                 (45.2 * 10 for avoiding float values) */
 
 /**
  * @brief   Magnetic flux conversion constants

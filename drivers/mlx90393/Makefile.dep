@@ -1,6 +1,4 @@
 ifneq (,$(filter mlx90393,$(USEMODULE)))
-  FEATURES_REQUIRED += periph_gpio
-  FEATURES_REQUIRED += periph_gpio_irq
   USEMODULE += ztimer
   USEMODULE += ztimer_msec
 endif
@@ -11,4 +9,13 @@ endif
 
 ifneq (,$(filter mlx90393_spi,$(USEMODULE)))
   FEATURES_REQUIRED += periph_spi
+endif
+
+ifneq (,$(filter mlx90393_woc,$(USEMODULE)))
+  USEMODULE += mlx90393_int
+endif
+
+ifneq (,$(filter mlx90393_int,$(USEMODULE)))
+  FEATURES_REQUIRED += periph_gpio
+  FEATURES_REQUIRED += periph_gpio_irq
 endif

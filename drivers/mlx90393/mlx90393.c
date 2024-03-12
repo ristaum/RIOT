@@ -23,23 +23,29 @@
 #include "mlx90393_constants.h"
 #include "mlx90393_params.h"
 #include "ztimer.h"
+
+#if !IS_USED(MODULE_MLX90393_INT)
 #include "imath.h"
+#endif
 
 #define ENABLE_DEBUG    0
 #include "debug.h"
 
-#if MODULE_MLX90393_SPI
+#if IS_USED(MODULE_MLX90393_SPI)
 #define DEV_SPI             (dev->params->spi)
 #define DEV_CS_PIN          (dev->params->cs_pin)
 #define DEV_CLK             (dev->params->clk)
 #define SPI_MODE            (SPI_MODE_3)
-#elif MODULE_MLX90393_I2C
+#elif IS_USED(MODULE_MLX90393_I2C)
 #define DEV_I2C             (dev->params->i2c)
 #define DEV_ADDR            (dev->params->addr)
 #endif
 
-#define DEV_MODE            (dev->params->mode)
+#if IS_USED(MODULE_MLX90393_INT)
 #define DEV_INT_PIN         (dev->params->int_pin)
+#endif
+
+#define DEV_MODE            (dev->params->mode)
 #define DEV_ODR             (dev->params->odr)
 #define DEV_GAIN            (dev->params->gain)
 #define DEV_RESOLUTION      (dev->params->resolution)
@@ -68,13 +74,20 @@ static int _get_gain_factor(mlx90393_gain_t gain);
 static int _reset(mlx90393_t *dev);
 static int _exit(mlx90393_t *dev);
 static int _is_avaiable(mlx90393_t *dev);
-static void _calculate_conv_time(mlx90393_t *dev);
 static int _read_measurement(mlx90393_t *dev, uint8_t *buffer);
+
+#if !IS_USED(MODULE_MLX90393_INT)
+static void _calculate_conv_time(mlx90393_t *dev);
+#endif
 
 int mlx90393_init(mlx90393_t *dev, const mlx90393_params_t *params)
 {
     assert(dev);
     assert(params);
+
+#if IS_USED(MODULE_MLX90393_INT)
+    assert(gpio_is_valid(DEV_INT_PIN));
+#endif
 
     dev->params = params;
 
@@ -172,13 +185,9 @@ int mlx90393_init(mlx90393_t *dev, const mlx90393_params_t *params)
             return error;
         }
     }
+#if IS_USED(MODULE_MLX90393_WOC)
     /* wake up on change mode */
     else if (DEV_MODE == MLX90393_MODE_WOC_ABSOLUTE || DEV_MODE == MLX90393_MODE_WOC_RELATIVE) {
-        if (!gpio_is_valid(DEV_INT_PIN)) {
-            _release(dev);
-            DEBUG("[mlx90393] error: No valid interrupt pin passed in params\n");
-            return -EINVAL;
-        }
         /* set absolute or relative wake up on change mode */
         int woc_mode = 0;
         if (DEV_MODE == MLX90393_MODE_WOC_RELATIVE) {
@@ -227,23 +236,35 @@ int mlx90393_init(mlx90393_t *dev, const mlx90393_params_t *params)
             return error;
         }
     }
-    if (DEV_MODE == MLX90393_MODE_SINGLE_MEASUREMENT && !gpio_is_valid(DEV_INT_PIN)) {
+#endif
+
+#if !IS_USED(MODULE_MLX90393_INT)
+    if (DEV_MODE == MLX90393_MODE_SINGLE_MEASUREMENT) {
         _calculate_conv_time(dev);
     }
+#endif
 
     _release(dev);
     return 0;
 }
+
+#if IS_USED(MODULE_MLX90393_INT)
 
 static void _isr(void *lock)
 {
     mutex_unlock(lock);
 }
 
+#endif
+
 int mlx90393_read(mlx90393_t *dev, mlx90393_data_t *data)
 {
     assert(dev);
     assert(data);
+
+#if IS_USED(MODULE_MLX90393_INT)
+    assert(gpio_is_valid(DEV_INT_PIN));
+#endif
 
     int error = 0;
 
@@ -260,9 +281,20 @@ int mlx90393_read(mlx90393_t *dev, mlx90393_data_t *data)
         }
         _release(dev);
     }
+
     uint8_t buffer[9];
-    /* wait for interrupt if used */
-    if (gpio_is_valid(DEV_INT_PIN)) {
+
+#if IS_USED(MODULE_MLX90393_INT)
+#if IS_USED(MODULE_MLX90393_WOC)
+    if (DEV_MODE == MLX90393_MODE_WOC_RELATIVE || DEV_MODE == MLX90393_MODE_WOC_ABSOLUTE) {
+        if ((error = _read_measurement(dev, buffer)) != 0) {
+            return error;
+        }
+        gpio_irq_disable(DEV_INT_PIN);
+    }
+#endif
+    if (DEV_MODE == MLX90393_MODE_SINGLE_MEASUREMENT || DEV_MODE == MLX90393_MODE_BURST) {
+        /* wait for interrupt */
         mutex_t lock = MUTEX_INIT_LOCKED;
         gpio_init_int(DEV_INT_PIN, GPIO_IN_PU, GPIO_RISING, _isr, &lock);
         mutex_lock(&lock);
@@ -271,21 +303,21 @@ int mlx90393_read(mlx90393_t *dev, mlx90393_data_t *data)
             return error;
         }
     }
-    else {
-        /* sleep for conversion time in single measurement mode */
-        if (DEV_MODE == MLX90393_MODE_SINGLE_MEASUREMENT) {
-            ztimer_sleep(ZTIMER_MSEC, dev->conversion_time);
-            if ((error = _read_measurement(dev, buffer)) != 0) {
-                return error;
-            }
-        }
-        /* polling in burst mode */
-        else if (DEV_MODE ==MLX90393_MODE_BURST) {
-            while (_read_measurement(dev, buffer) != 0) {
-                ztimer_sleep(ZTIMER_MSEC, MLX90393_BM_READ_TIMEOUT);
-            }
+#else
+    /* sleep for conversion time in single measurement mode */
+    if (DEV_MODE == MLX90393_MODE_SINGLE_MEASUREMENT) {
+        ztimer_sleep(ZTIMER_MSEC, dev->conversion_time);
+        if ((error = _read_measurement(dev, buffer)) != 0) {
+            return error;
         }
     }
+    /* polling in burst mode */
+    else if (DEV_MODE ==MLX90393_MODE_BURST) {
+        while (_read_measurement(dev, buffer) != 0) {
+            ztimer_sleep(ZTIMER_MSEC, MLX90393_BM_READ_TIMEOUT);
+        }
+    }
+#endif
 
     /* convert read data according to Table 17 and 21 from Datasheet */
     int16_t raw_x, raw_y, raw_z;
@@ -314,6 +346,19 @@ int mlx90393_read(mlx90393_t *dev, mlx90393_data_t *data)
 
     return 0;
 }
+
+#if IS_USED(MODULE_MLX90393_WOC)
+
+void mlx90393_enable_woc(mlx90393_t *dev, mlx90393_cb_t cb, void *arg)
+{
+    assert(dev);
+    assert(gpio_is_valid(DEV_INT_PIN));
+    assert(cb);
+
+    gpio_init_int(DEV_INT_PIN, GPIO_IN_PU, GPIO_RISING, cb, arg);
+}
+
+#endif
 
 int mlx90393_stop_cont(mlx90393_t *dev)
 {
@@ -350,12 +395,16 @@ int mlx90393_start_cont(mlx90393_t *dev)
             return error;
         }
     }
+
+#if IS_USED(MODULE_MLX90393_WOC)
     else if (DEV_MODE == MLX90393_MODE_WOC_RELATIVE || DEV_MODE == MLX90393_MODE_WOC_ABSOLUTE) {
         if ((error = _write_byte(dev, MLX90393_COMMAND_SW)) != 0) {
             _release(dev);
             return error;
         }
     }
+#endif
+
     if ((error = _check_status_byte(dev)) != 0) {
         _release(dev);
         return error;
@@ -365,7 +414,7 @@ int mlx90393_start_cont(mlx90393_t *dev)
     return 0;
 }
 
-#if MODULE_MLX90393_SPI
+#if IS_USED(MODULE_MLX90393_SPI)
 
 static int _init_bus(const mlx90393_t *dev)
 {
@@ -410,7 +459,7 @@ static int _read_bytes(mlx90393_t *dev, void *buffer, size_t len)
     return 0;
 }
 
-#elif MODULE_MLX90393_I2C
+#elif IS_USED(MODULE_MLX90393_I2C)
 
 static int _init_bus(const mlx90393_t *dev)
 {
@@ -589,6 +638,8 @@ static int _is_avaiable(mlx90393_t *dev)
     return buffer == CONN_TEST_DATA ? 0 : -ENXIO;
 }
 
+#if !IS_USED(MODULE_MLX90393_INT)
+
 static void _calculate_conv_time(mlx90393_t *dev)
 {
     /* calculate single measurement conversion time in ms
@@ -598,6 +649,8 @@ static void _calculate_conv_time(mlx90393_t *dev)
     dev->conversion_time = (MLX90393_T_STBY + MLX90393_T_ACTIVE + 3 * conv_mag + conv_temp
         + MLX90393_T_CONV_END) / 1000 + 1;
 }
+
+#endif
 
 static int _read_measurement(mlx90393_t *dev, uint8_t *buffer)
 {

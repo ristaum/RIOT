@@ -38,11 +38,15 @@ extern "C" {
 #define MLX90393_PARAM_MODE             (MLX90393_MODE_BURST)
 #endif
 
+#if IS_USED(MODULE_MLX90393_INT) || DOXYGEN
 #ifndef MLX90393_PARAM_INT_PIN
 /**
  * @brief   Default interrupt pin
  */
-#define MLX90393_PARAM_INT_PIN          (GPIO_PIN(PORT_C, 8))
+#define MLX90393_PARAM_INT_PIN          .int_pin = (GPIO_PIN(PORT_C, 8)),
+#endif
+#else
+#define MLX90393_PARAM_INT_PIN
 #endif
 
 #ifndef MLX90393_PARAM_GAIN
@@ -84,20 +88,25 @@ extern "C" {
 #define MLX90393_PARAM_DIG_FILT         (MLX90393_DIG_FILT_1)
 #endif
 
+#if IS_USED(MODULE_MLX90393_WOC) || DOXYGEN
 #ifndef MLX90393_PARAM_THRESHOLD
 /**
  * @brief   Default thresholds for Wake-up On Change mode
  */
 #define MLX90393_PARAM_THRESHOLD                    \
+.threshold =                                        \
 {                                                   \
     .xy             = 0xFFFF,                       \
     .z              = 1000,                         \
     .temp           = 0xFFFF                        \
-}
+},
+#endif
+#else
+#define MLX90393_PARAM_THRESHOLD
 #endif
 
 /* Default configuration for SPI mode */
-#if MODULE_MLX90393_SPI
+#if IS_USED(MODULE_MLX90393_SPI) || DOXYGEN
 
 #ifndef MLX90393_PARAM_SPI
 /**
@@ -129,18 +138,18 @@ extern "C" {
                                 .cs_pin         = MLX90393_PARAM_SPI_CS_PIN,    \
                                 .clk            = MLX90393_PARAM_SPI_CLK,       \
                                 .mode           = MLX90393_PARAM_MODE,          \
-                                .int_pin        = MLX90393_PARAM_INT_PIN,       \
                                 .gain           = MLX90393_PARAM_GAIN,          \
                                 .resolution     = MLX90393_PARAM_RES,           \
                                 .odr            = MLX90393_PARAM_ODR,           \
                                 .oversampling   = MLX90393_PARAM_OSR,           \
                                 .dig_filt       = MLX90393_PARAM_DIG_FILT,      \
-                                .threshold      = MLX90393_PARAM_THRESHOLD      \
+                                MLX90393_PARAM_INT_PIN                          \
+                                MLX90393_PARAM_THRESHOLD                        \
                             }
 #endif
 
 /* Default configuration for I2C mode */
-#elif MODULE_MLX90393_I2C
+#elif IS_USED(MODULE_MLX90393_I2C) || DOXYGEN
 
 #ifndef MLX90393_PARAM_I2C
 /**
@@ -164,13 +173,13 @@ extern "C" {
                                 .i2c            = MLX90393_PARAM_I2C,           \
                                 .addr           = MLX90393_PARAM_I2C_ADDR,      \
                                 .mode           = MLX90393_PARAM_MODE,          \
-                                .int_pin        = MLX90393_PARAM_INT_PIN,       \
                                 .gain           = MLX90393_PARAM_GAIN,          \
                                 .resolution     = MLX90393_PARAM_RES,           \
                                 .odr            = MLX90393_PARAM_ODR,           \
                                 .oversampling   = MLX90393_PARAM_OSR,           \
                                 .dig_filt       = MLX90393_PARAM_DIG_FILT,      \
-                                .threshold      = MLX90393_PARAM_THRESHOLD      \
+                                MLX90393_PARAM_INT_PIN                          \
+                                MLX90393_PARAM_THRESHOLD                        \
                             }
 #endif
 #endif
@@ -181,9 +190,9 @@ extern "C" {
  */
 static const mlx90393_params_t mlx90393_params[] =
 {
-#if MODULE_MLX90393_SPI
+#if IS_USED(MODULE_MLX90393_SPI)
     MLX90393_PARAMS_SPI
-#elif MODULE_MLX90393_I2C
+#elif IS_USED(MODULE_MLX90393_I2C)
     MLX90393_PARAMS_I2C
 #endif
 };

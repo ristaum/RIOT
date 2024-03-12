@@ -20,32 +20,44 @@
  * The test application demonstrates the use of different functions of
  * the MLX90393 sensor driver depending on the used modules and configuration params.
  *
- * By default the test application uses the I2C bus and the default params set
- * defined in file mlx90393_params.h. The default params use the Burst mode
- * and interrupts to wait for the sensor data to be ready.
+ * Pseudomodule        | Functionality
+ * :-------------------|:-------------------------------------------------------
+ * `mlx90393_i2c`      | Use I2C bus
+ * `mlx90393_spi`      | Use SPI bus
+ * `mlx90393_int`      | Data ready interrupt handling
+ * `mlx90393_woc`      | Wake-up on change mode
+ *
+ * By default the test application uses the I2C bus, polling and the default params set
+ * defined in file mlx90393_params.h. The default params use the Burst mode.
+ * To use data ready interrupts instead of polling for new data, the `mlx90393_int` module
+ * has to be used.
  *
  * ## Usage
  * To compile and execute the test application, use command in the test directory:
  * make BOARD=... flash
  *
  * To test the different driver functions you can overwrite the parameters in the
- * default configuration set.
+ * default configuration set or add modules.
  *
  * Some examples:
  *
  * Wake-up on change mode absolute:
  * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
  * CFLAGS="-DMLX90393_PARAM_MODE=MLX90393_MODE_WOC_ABSOLUTE" \
+ * USEMODULE='mlx90393_woc' \
  * make BOARD=... flash
  * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ *
  * Single measurement mode:
  * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
  * CFLAGS="-DMLX90393_PARAM_MODE=MLX90393_MODE_SINGLE_MEASUREMENT" \
  * make BOARD=... flash
  * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
- * Deactivate interrupt:
+ *
+ * Burst mode with interrupt:
  * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
- * CFLAGS="-DMLX90393_PARAM_INT_PIN=GPIO_UNDEF" \
+ * CFLAGS="-DMLX90393_PARAM_MODE=MLX90393_MODE_BURST" \
+ * USEMODULE='mlx90393_int' \
  * make BOARD=... flash
  * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
  *
@@ -93,16 +105,29 @@ static void print_error(int error)
     }
 }
 
+#if IS_USED(MODULE_MLX90393_WOC)
+void woc_cb(void *arg)
+{
+    *(int*)arg = 1;
+}
+#endif
+
 int main(void)
 {
-    puts("MAG3110 magnetometer driver test application\n\r");
-#if MODULE_MLX90393_SPI
+    puts("MLX90393 magnetometer driver test application\n\r");
+#if IS_USED(MODULE_MLX90393_SPI)
     printf("Initializing MLX90393 magnetometer at SPI_%i", mlx90393_params[0].spi);
-#elif MODULE_MLX90393_I2C
+#elif IS_USED(MODULE_MLX90393_I2C)
     printf("Initializing MLX90393 magnetometer at I2C_%i", mlx90393_params[0].i2c);
 #endif
+
     mlx90393_t dev;
     int error = 0;
+
+#if IS_USED(MODULE_MLX90393_WOC)
+    int woc_triggered = 0;
+#endif
+
     if ((error = mlx90393_init(&dev, &mlx90393_params[0])) != 0) {
         puts("[FAILED]");
         print_error(error);
@@ -111,28 +136,51 @@ int main(void)
     puts("[SUCCESS]");
 
     unsigned count = 0;
-
     mlx90393_data_t data;
-    puts("Starting read data from the device");
-    while (1) {
-        if ((error = mlx90393_read(&dev, &data)) != 0) {
-            puts("Failed to read data from the device");
-            print_error(error);
-            return -1;
-        }
-        printf("Field strength: X: %ld uT Y: %ld uT Z: %ld uT\n\r",
-            data.x_axis, data.y_axis, data.z_axis);
-        printf("Temperature: %d d°C\n\r", data.temp);
 
-        if (dev.params->mode == MLX90393_MODE_SINGLE_MEASUREMENT) {
-            ztimer_sleep(ZTIMER_SEC, 1);
+    puts("Starting read data from the device");
+
+#if IS_USED(MODULE_MLX90393_WOC)
+    mlx90393_enable_woc(&dev, woc_cb, &woc_triggered);
+#endif
+    while (1) {
+
+#if IS_USED(MODULE_MLX90393_WOC)
+        if (woc_triggered) {
+            if ((error = mlx90393_read(&dev, &data)) != 0) {
+                puts("Failed to read data from the device");
+                print_error(error);
+                return -1;
+            }
+            printf("Field strength: X: %ld uT Y: %ld uT Z: %ld uT\n\r",
+                data.x_axis, data.y_axis, data.z_axis);
+            printf("Temperature: %d d°C\n\r", data.temp);
+            count++;
+            woc_triggered = 0;
+            mlx90393_enable_woc(&dev, woc_cb, &woc_triggered);
+        }
+#endif
+        if (dev.params->mode == MLX90393_MODE_BURST ||
+            dev.params->mode == MLX90393_MODE_SINGLE_MEASUREMENT) {
+            if ((error = mlx90393_read(&dev, &data)) != 0) {
+                puts("Failed to read data from the device");
+                print_error(error);
+                return -1;
+            }
+            printf("Field strength: X: %ld uT Y: %ld uT Z: %ld uT\n\r",
+                data.x_axis, data.y_axis, data.z_axis);
+            printf("Temperature: %d d°C\n\r", data.temp);
+
+            if (dev.params->mode == MLX90393_MODE_SINGLE_MEASUREMENT) {
+                ztimer_sleep(ZTIMER_SEC, 1);
+            }
+            count++;
         }
 
         /*
          * the continuous measurement is stopped, the sensor is set to idle mode
          * and started again after 5 seconds every 50 cycles
          */
-        count++;
         if (dev.params->mode != MLX90393_MODE_SINGLE_MEASUREMENT && count == 50) {
             mlx90393_stop_cont(&dev);
             puts("Measurement stopped and sensor set to idle mode.");
